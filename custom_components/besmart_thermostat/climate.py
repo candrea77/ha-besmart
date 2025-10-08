@@ -271,10 +271,10 @@ class Thermostat(ClimateEntity):
         return {
             ATTR_MODE: self._current_state,
             "updating_temp": self._tempSet != self.target_temperature
-            # "battery_state": self._battery,
-            # "frost_t": self._frostT,
-            # "confort_t": self._comfT,
-            # "save_t": self._saveT,
+            "battery_state": self._battery,
+            "frost_temp": self._frostT,
+            "confort_temp": self._comfT,
+            "economy_temp": self._saveT,
             # "season_mode": self.hvac_mode,
             # "heating_state": self._heating_state,
         }
@@ -355,9 +355,10 @@ class Thermostat(ClimateEntity):
 
         # Misc
         try:
-            self._battery = not bool(int(thermostat.get("battery_power")))
+            self._battery = int(thermostat.get("battery_power"))
         except ValueError:
-            self._battery = False
+            self._battery = -1
+
         self._current_unit = thermostat.get("unit")
         self._season = thermostat.get("season")
 
