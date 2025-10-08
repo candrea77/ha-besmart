@@ -271,11 +271,11 @@ class Thermostat(ClimateEntity):
         return {
             ATTR_MODE: self._current_state,
             "setpoint_OT": self._setpoint_OT,
-            "updating_temp": self._tempSet != self.target_temperature
+            "updating_temp": self._tempSet != self.target_temperature,
             "battery_state": self._battery,
             "frost_temp": self._frostT,
             "confort_temp": self._comfT,
-            "economy_temp": self._saveT,
+            "economy_temp": self._saveT
             # "season_mode": self.hvac_mode,
             # "heating_state": self._heating_state,
         }
