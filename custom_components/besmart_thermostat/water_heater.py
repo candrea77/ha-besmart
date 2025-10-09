@@ -170,7 +170,6 @@ class WaterHeater(WaterHeaterEntity):
         """Return the device specific state attributes."""
         return {
             # ATTR_MODE: self._current_state,
-            # "battery_state": self._battery,
             # "frost_t": self._frostT,
             # "confort_t": self._comfT,
             # "save_t": self._saveT,

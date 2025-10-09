@@ -52,17 +52,28 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     new_entities = []
-    
+
+    # Initialize hass.data[DOMAIN] if not already set
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+
+    climate_entities = []
     for device in config_entry.interface_devices:
         wifi_box = device.wifi_box
         for thermostat in device.thermostats:
             room_id = thermostat.get("id")
             room_name = thermostat.get("name")
-            new_entities.append(Thermostat(hass, config_entry, wifi_box, room_id, room_name, device.device_info))
+            climate = Thermostat(hass, config_entry, wifi_box, room_id, room_name, device.device_info)
+            new_entities.append(climate)
+            climate_entities.append(climate)
+            # Store climate entity by unique_id for reference
+            hass.data[DOMAIN][climate.unique_id] = climate
 
     if new_entities:
+        _LOGGER.debug("Adding %d climate entities", len(new_entities))
         async_add_entities(new_entities, update_before_add=True)
-
+    else:
+        _LOGGER.warning("No climate entities created; no thermostats found")
 
 async def async_remove_entry(hass, entry) -> None:
     """Handle removal of an entry."""
@@ -139,11 +150,12 @@ class Thermostat(ClimateEntity):
         self._tempSet = 0
         self._tempSetMark = 0
         self._heating_state = False
-        self._battery = "0"
+        self._battery_low = None
         self._frostT = 0
         self._saveT = 0
         self._comfT = 0
         self._season = "1"
+        self._setpoint_OT = 0
 
         # link to BeSMART device
         self._attr_device_info = device_info
@@ -272,7 +284,7 @@ class Thermostat(ClimateEntity):
             ATTR_MODE: self._current_state,
             "setpoint_OT": self._setpoint_OT,
             "updating_temp": self._tempSet != self.target_temperature,
-            "battery_state": self._battery,
+            "battery_low": self._battery_low,
             "frost_temp": self._frostT,
             "confort_temp": self._comfT,
             "economy_temp": self._saveT
@@ -359,9 +371,9 @@ class Thermostat(ClimateEntity):
 
         # Misc
         try:
-            self._battery = int(thermostat.get("battery_power"))
+            self._battery_low = bool(int(thermostat.get("battery_power")))
         except ValueError:
-            self._battery = -1
+            self._battery_low = None
 
         self._current_unit = thermostat.get("unit")
         self._season = thermostat.get("season")

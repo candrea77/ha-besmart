@@ -5,10 +5,11 @@
   "documentation": "https://github.com/coder89/ha-besmart",
   "issue_tracker": "https://github.com/coder89/ha-besmart/issues",
   "integration_type": "device",
-  "dependencies": [],
+  "dependencies": ["schedule"],
   "after_dependencies": ["http"],
   "config_flow": true,
   "codeowners": ["@coder89"],
-  "requirements": [],
-  "iot_class": "cloud_polling"
+  "requirements": ["requests", "asyncio"],
+  "iot_class": "cloud_polling",
+  "platforms": ["climate", "water_heater", "sensor"]
 }
