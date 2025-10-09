@@ -37,5 +37,16 @@
                 }
             }
         }
+    },
+    "entity": {
+        "sensor": {
+            "battery_status": {
+                "state": {
+                    "low": "Low",
+                    "good": "Good",
+                    "unknown": "Unknown"
+                }
+            }
+        }
     }
 }
