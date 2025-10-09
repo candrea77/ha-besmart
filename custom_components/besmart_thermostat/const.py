@@ -7,4 +7,5 @@ DOMAIN = "besmart_thermostat"
 PLATFORMS: list[Platform] = [
     Platform.CLIMATE,
     Platform.WATER_HEATER,
+    Platform.SENSOR,
 ]
