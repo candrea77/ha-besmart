@@ -98,16 +98,21 @@ class BesmartClient(object):
             if not res.ok:
                 res.raise_for_status()
 
-            message = data.get("message")
+            # Fix 1: Assicuriamo che message sia un dizionario, anche se l'API risponde con None
+            message = data.get("message") or {}
             boiler = message.get("boiler")
+            
+            # Fix 2: Assicuriamo che la lista thermostat esista prima di iterare (evita il crash del filtro)
             thermostats = list(
-                filter(lambda x: x.get("id") != None, message.get("thermostat"))
+                filter(lambda x: x.get("id") is not None, message.get("thermostat") or [])
             )
+            
             _LOGGER.debug("boiler: {}".format(boiler))
             _LOGGER.debug("thermostats: {}".format(thermostats))
             return { "boiler": boiler, "thermostats": thermostats }
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in devices(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return None
 
     async def thermostat(self, wifi_box: str, thermostat: str):
@@ -134,7 +139,8 @@ class BesmartClient(object):
             _LOGGER.debug("thermostat data: {}".format(message))
             return message
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in thermostat(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return None
 
     async def thermostatSettings(self, wifi_box: str, thermostat: str):
@@ -161,7 +167,8 @@ class BesmartClient(object):
             _LOGGER.debug("thermostat settings: {}".format(message))
             return message
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in thermostatSettings(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return None
 
     async def setThermostatMode(self, wifi_box: str, thermostat: str, mode: str):
@@ -187,10 +194,11 @@ class BesmartClient(object):
             if not res.ok:
                 res.raise_for_status()
 
-            _LOGGER.debug("thermostat set temp: {}".format(data))
+            _LOGGER.debug("thermostat set mode: {}".format(data))
             return True
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in setThermostatMode(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return False
 
     async def setThermostatTemp(self, wifi_box: str, thermostat: str, temp: float, tempMode: str):
@@ -221,7 +229,8 @@ class BesmartClient(object):
             _LOGGER.debug("thermostat set temp: {}".format(data))
             return True
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in setThermostatTemp(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return False
 
     async def setThermostatSeason(self, wifi_box: str, thermostat: str, season: str):
@@ -229,6 +238,9 @@ class BesmartClient(object):
             await self._ensure_login()
 
             settings = await self.thermostatSettings(wifi_box, thermostat)
+            if not settings:
+                raise Exception("Impossibile recuperare i settaggi correnti del termostato.")
+                
             settings["season"] = season
 
             async with asyncio.timeout(self._timeout):
@@ -255,10 +267,11 @@ class BesmartClient(object):
             if not res.ok:
                 res.raise_for_status()
 
-            _LOGGER.debug("thermostat set temp: {}".format(data))
+            _LOGGER.debug("thermostat set season: {}".format(data))
             return True
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in setThermostatSeason(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return False
 
     async def boiler(self, wifi_box: str):
@@ -284,7 +297,8 @@ class BesmartClient(object):
             _LOGGER.debug("boiler data: {}".format(message))
             return message
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in boiler(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return None
 
     async def setBoilerMode(self, wifi_box: str, mode: str):
@@ -309,10 +323,11 @@ class BesmartClient(object):
             if not res.ok:
                 res.raise_for_status()
 
-            _LOGGER.debug("boiler set temp: {}".format(data))
+            _LOGGER.debug("boiler set mode: {}".format(data))
             return True
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in setBoilerMode(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return False
 
     async def setBoilerTemp(self, wifi_box: str, temp: float):
@@ -340,7 +355,8 @@ class BesmartClient(object):
             _LOGGER.debug("boiler set temp: {}".format(data))
             return True
         except Exception as ex:
-            _LOGGER.warning(ex)
+            _LOGGER.warning("Errore in setBoilerTemp(): %s", ex)
+            self._user = None # Forza il re-login al prossimo ciclo
             return False
 
     async def _ensure_login(self):
