@@ -82,13 +82,22 @@ class WaterHeater(WaterHeaterEntity):
         self._entry_id = config_entry.entry_id
         self._wifi_box = wifi_box
         self._cl = config_entry.runtime_data
-        self._current_temp = interface_device.boiler["dhw_current_temp"]
-        self._current_mode = interface_device.boiler["mode"]
+        
+        # FIX: Safe extraction during init
+        boiler_data = getattr(interface_device, 'boiler', {}) or {}
+        try:
+            self._current_temp = float(boiler_data.get("dhw_current_temp", 0.0))
+        except (ValueError, TypeError):
+            self._current_temp = 0.0
+            
+        self._current_mode = boiler_data.get("mode", "2")
         self._previous_climate_active = None
+        
         if len(interface_device.thermostats) > 0:
-            self._current_unit = interface_device.thermostats[0]["unit"]
+            self._current_unit = interface_device.thermostats[0].get("unit", "0")
         else:
             self._current_unit = "0"
+            
         self._tempSet = 0.0
 
         # link to BeSMART device
@@ -169,15 +178,9 @@ class WaterHeater(WaterHeaterEntity):
     def extra_state_attributes(self):
         """Return the device specific state attributes."""
         return {
-            # ATTR_MODE: self._current_state,
-            # "frost_t": self._frostT,
-            # "confort_t": self._comfT,
-            # "save_t": self._saveT,
-            # "season_mode": self.hvac_mode,
-            # "heating_state": self._heating_state,
-            "flame_status": self._flame_status,
-            "outdoor_temperature": self._outdoor_temperature,
-            "system_pressure": self._system_pressure,
+            "flame_status": getattr(self, '_flame_status', 0),
+            "outdoor_temperature": getattr(self, '_outdoor_temperature', 0.0),
+            "system_pressure": getattr(self, '_system_pressure', 0.0),
         }
 
     async def async_update(self):
@@ -187,44 +190,49 @@ class WaterHeater(WaterHeaterEntity):
         # Get thermostat data
         boiler = await self._cl.boiler(self._wifi_box)
 
+        # FIX: Protective shield against Server Error 500
+        if not boiler:
+            _LOGGER.warning("Dati boiler non disponibili. Salto l'aggiornamento per evitare crash.")
+            return
+
         # Current operation mode
         try:
-            self._current_mode = boiler.get("work_mode")
-        except ValueError:
+            self._current_mode = boiler.get("work_mode", "2")
+        except (ValueError, TypeError):
             self._current_mode = "2"
 
         # Extract programmed temperature
         try:
-            self._tempSet = float(boiler.get("dhw_target_temp"))
-        except ValueError:
+            self._tempSet = float(boiler.get("dhw_target_temp", 0.0))
+        except (ValueError, TypeError):
             self._tempSet = 0.0
 
         # Extract current temperature
         try:
-            self._current_temp = float(boiler.get("dhw_current_temp"))
-        except ValueError:
+            self._current_temp = float(boiler.get("dhw_current_temp", 0.0))
+        except (ValueError, TypeError):
             self._current_temp = 0.0
 
         # Extract flame status
         try:
-            self._flame_status = float(boiler.get("flame_status"))
-        except ValueError:
+            self._flame_status = float(boiler.get("flame_status", 0))
+        except (ValueError, TypeError):
             self._flame_status = 0
 
         # Extract outdoor temperature
         try:
-            self._outdoor_temperature = float(boiler.get("outdoor_probe_temp"))
-        except ValueError:
+            self._outdoor_temperature = float(boiler.get("outdoor_probe_temp", 0.0))
+        except (ValueError, TypeError):
             self._outdoor_temperature = 0.0
 
         # Extract system pressure
         try:
-            self._system_pressure = float(boiler.get("system_pressure"))
-        except ValueError:
+            self._system_pressure = float(boiler.get("system_pressure", 0.0))
+        except (ValueError, TypeError):
             self._system_pressure = 0.0
 
         # Misc
-        self._current_unit = boiler.get("unit")
+        self._current_unit = boiler.get("unit", "0")
 
     async def async_turn_on(self):
         """Turn off the heater"""
@@ -247,7 +255,10 @@ class WaterHeater(WaterHeaterEntity):
         """Set HVAC mode (comfort, home, sleep, Party, Off)."""
         if mode == self.STATE_OFF:
             devices = await self._cl.devices(self._wifi_box)
-            self._previous_climate_active = any(x["mode"] != "5" and x["mode"] != "4" for x in devices["thermostats"])
+            if devices and "thermostats" in devices:
+                self._previous_climate_active = any(x.get("mode") != "5" and x.get("mode") != "4" for x in devices["thermostats"])
+            else:
+                self._previous_climate_active = False
             await self._cl.setBoilerMode(self._wifi_box, "2")
         elif self._previous_climate_active:
             await self._cl.setBoilerMode(self._wifi_box, "0")
