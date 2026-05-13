@@ -7,7 +7,7 @@ Be aware the thermostat may require more then 3 minute to refresh its states.
 The thermostats support the season switch however this control will be managed with a 
 different control.
 
-Tested with home-assistant >= 2025.1
+Tested with home-assistant >= 2026.5
 
 Using HACS, add the custom repository, selecting **"Integration"** as the value for **"Type"**
 
