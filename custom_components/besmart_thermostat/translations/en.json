@@ -9,13 +9,17 @@
                     "name": "Name",
                     "username": "Username",
                     "password": "Password",
-                    "mode": "Work mode"
+                    "mode": "Work mode",
+                    "verify_ssl": "Verify TLS certificate",
+                    "scan_interval": "Update interval (s)"
                 },
                 "data_description": {
                     "name": "Name of the integration.",
                     "username": "Provide username for the BeSMART account.",
                     "password": "Provide password for the BeSMART account.",
-                    "mode": "Select available work modes of BeSMART controlled device"
+                    "mode": "Select available work modes of BeSMART controlled device",
+                    "verify_ssl": "Verify the BeSMART cloud TLS certificate. Disable only if login fails due to a broken/incomplete certificate chain.",
+                    "scan_interval": "How often to poll the BeSMART cloud (the cloud itself refreshes roughly every 3 minutes)."
                 }
             }
         }
@@ -27,13 +31,17 @@
                     "name": "Name",
                     "username": "Username",
                     "password": "Password",
-                    "mode": "Work mode"
+                    "mode": "Work mode",
+                    "verify_ssl": "Verify TLS certificate",
+                    "scan_interval": "Update interval (s)"
                 },
                 "data_description": {
                     "name": "Name of the integration.",
                     "username": "Provide username for the BeSMART account.",
                     "password": "Provide password for the BeSMART account.",
-                    "mode": "Select available work modes of BeSMART controlled device"
+                    "mode": "Select available work modes of BeSMART controlled device",
+                    "verify_ssl": "Verify the BeSMART cloud TLS certificate. Disable only if login fails due to a broken/incomplete certificate chain.",
+                    "scan_interval": "How often to poll the BeSMART cloud (the cloud itself refreshes roughly every 3 minutes)."
                 }
             }
         }

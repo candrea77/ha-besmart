@@ -9,13 +9,17 @@
                     "name": "Name",
                     "username": "Username",
                     "password": "Password",
-                    "mode": "Work mode"
+                    "mode": "Work mode",
+                    "verify_ssl": "Verify TLS certificate",
+                    "scan_interval": "Update interval (s)"
                 },
                 "data_description": {
                     "name": "Name of the integration.",
                     "username": "Provide username for the BeSMART account.",
                     "password": "Provide password for the BeSMART account.",
-                    "mode": "Select available work modes of BeSMART controlled device"
+                    "mode": "Select available work modes of BeSMART controlled device",
+                    "verify_ssl": "Verify the BeSMART cloud TLS certificate. Disable only if login fails due to a broken/incomplete certificate chain.",
+                    "scan_interval": "How often to poll the BeSMART cloud (the cloud itself refreshes roughly every 3 minutes)."
                 }
             }
         }
@@ -27,13 +31,17 @@
                     "name": "[%key:component::besmart_thermostat::config::step::user::data::name%]",
                     "username": "[%key:component::besmart_thermostat::config::step::user::data::username%]",
                     "password": "[%key:component::besmart_thermostat::config::step::user::data::password%]",
-                    "mode": "[%key:component::besmart_thermostat::config::step::user::data::mode%]"
+                    "mode": "[%key:component::besmart_thermostat::config::step::user::data::mode%]",
+                    "verify_ssl": "[%key:component::besmart_thermostat::config::step::user::data::verify_ssl%]",
+                    "scan_interval": "[%key:component::besmart_thermostat::config::step::user::data::scan_interval%]"
                 },
                 "data_description": {
                     "name": "[%key:component::besmart_thermostat::config::step::user::data_description::name%]",
                     "username": "[%key:component::besmart_thermostat::config::step::user::data_description::username%]",
                     "password": "[%key:component::besmart_thermostat::config::step::user::data_description::password%]",
-                    "mode": "[%key:component::besmart_thermostat::config::step::user::data_description::mode%]"
+                    "mode": "[%key:component::besmart_thermostat::config::step::user::data_description::mode%]",
+                    "verify_ssl": "[%key:component::besmart_thermostat::config::step::user::data_description::verify_ssl%]",
+                    "scan_interval": "[%key:component::besmart_thermostat::config::step::user::data_description::scan_interval%]"
                 }
             }
         }

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 
-# PATCH: removed unused imports (http.HTTPStatus, requests.HTTPError, const.Platform);
-# requests is no longer used anywhere (all I/O is aiohttp) and auth is handled below.
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_USERNAME,
     CONF_PASSWORD,
+    CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -18,10 +17,13 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from .const import PLATFORMS
 from .device import BesmartInterfaceDevice
 from .api import BesmartClient
+from .coordinator import BesmartDataUpdateCoordinator
 
-type BesmartConfigEntry = ConfigEntry[BesmartClient]
+# runtime_data now holds the coordinator (it exposes .client for write commands).
+type BesmartConfigEntry = ConfigEntry[BesmartDataUpdateCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -29,14 +31,19 @@ async def async_setup_entry(
 ) -> bool:
     """Set up besmart_thermostat from a config entry."""
 
-    # 1. Create API instance
+    # 1. Create API instance.
     besmart_config = entry.options
-    client = BesmartClient(hass, besmart_config[CONF_USERNAME], besmart_config[CONF_PASSWORD])
+    # Legacy entries created before this option keep the old behaviour (no
+    # verification); new entries default to True via the config flow schema.
+    verify_ssl = besmart_config.get(CONF_VERIFY_SSL, False)
+    client = BesmartClient(
+        hass,
+        besmart_config[CONF_USERNAME],
+        besmart_config[CONF_PASSWORD],
+        verify_ssl,
+    )
 
-    # 2. Validate the API connection (and authentication)
-    # PATCH: login() now raises ConfigEntryAuthFailed itself on bad credentials
-    # (error_code "6"); re-raise it so HA starts the reauth flow, everything else
-    # becomes ConfigEntryNotReady. Old code caught requests.HTTPError that was never raised.
+    # 2. Validate the API connection (and authentication).
     try:
         wifi_boxes = await client.login()
     except ConfigEntryAuthFailed:
@@ -44,15 +51,19 @@ async def async_setup_entry(
     except Exception as ex:
         raise ConfigEntryNotReady from ex
 
-    # 3. Store an API object for your platforms to access
-    entry.runtime_data = client
-
-    # 4. Register BeSMART Controller devices for all wifi boxes
+    # 3. Register BeSMART Controller devices for all wifi boxes (topology).
     interface_devices = []
     for wifi_box in wifi_boxes:
         devices = await client.devices(wifi_box)
+        if devices is None:
+            raise ConfigEntryNotReady(f"No data for wifi box {wifi_box}")
         interface_devices.append(BesmartInterfaceDevice(hass, entry, wifi_box, devices))
     entry.interface_devices = interface_devices
+
+    # 4. Create the coordinator and do the first refresh before adding entities.
+    coordinator = BesmartDataUpdateCoordinator(hass, entry, client)
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_config_entry_update_listener))

@@ -37,7 +37,8 @@ class BesmartClient(object):
         self,
         hass: HomeAssistant,
         username: str,
-        password: str
+        password: str,
+        verify_ssl: bool = True,
     ):
         """Initialize the thermostat."""
         self._username = username
@@ -45,7 +46,11 @@ class BesmartClient(object):
         self._lastupdate = None
         self._user = None
         self._timeout = 30
-        self._session = async_get_clientsession(hass, verify_ssl=False)
+        # PATCH: verify_ssl is now a config option instead of being hardcoded False.
+        # async_get_clientsession caches one session per verify_ssl flag, so True
+        # reuses HA's shared verified session and False uses an isolated no-verify
+        # session (no degradation of the shared one).
+        self._session = async_get_clientsession(hass, verify_ssl=verify_ssl)
 
     # PATCH: removed unused _fahToCent()/_centToFah() helpers (dead code).
 
@@ -366,3 +371,12 @@ class BesmartClient(object):
     async def _ensure_login(self):
         if not self._user:
             await self.login()
+
+    async def ensure_login(self):
+        """Public wrapper: ensure we are logged in.
+
+        Used by the coordinator as a pre-flight so that ConfigEntryAuthFailed
+        (raised by login() on error_code "6") propagates and triggers the HA
+        reauth flow, instead of being swallowed as None by the resource methods.
+        """
+        await self._ensure_login()

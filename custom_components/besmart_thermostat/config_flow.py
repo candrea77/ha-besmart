@@ -12,6 +12,7 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_MODE,
+    CONF_VERIFY_SSL,
 )
 from homeassistant.helpers import selector
 from homeassistant.helpers.schema_config_entry_flow import (
@@ -20,7 +21,15 @@ from homeassistant.helpers.schema_config_entry_flow import (
 )
 from homeassistant.components.climate.const import HVACMode
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_VERIFY_SSL,
+    DEFAULT_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+    MAX_SCAN_INTERVAL,
+    SCAN_INTERVAL_STEP,
+)
 
 OPTIONS_SCHEMA = {
     vol.Required(CONF_NAME): selector.TextSelector(),
@@ -33,6 +42,19 @@ OPTIONS_SCHEMA = {
         ],
         "multiple": True,
     }),
+    # TLS certificate verification. Default True (secure). Uncheck only if the
+    # BeSMART cloud endpoint presents a broken/incomplete certificate chain.
+    vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): selector.BooleanSelector(),
+    # Polling period in seconds for the data coordinator.
+    vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=MIN_SCAN_INTERVAL,
+            max=MAX_SCAN_INTERVAL,
+            step=SCAN_INTERVAL_STEP,
+            unit_of_measurement="s",
+            mode=selector.NumberSelectorMode.SLIDER,
+        )
+    ),
 }
 
 CONFIG_SCHEMA = {
