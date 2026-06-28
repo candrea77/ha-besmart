@@ -1,15 +1,13 @@
 {
   "domain": "besmart_thermostat",
-  "name": "BeSmart",
-  "version": "0.2",
+  "name": "BeSMART",
+  "version": "0.3",
   "documentation": "https://github.com/coder89/ha-besmart",
   "issue_tracker": "https://github.com/coder89/ha-besmart/issues",
   "integration_type": "device",
-  "dependencies": ["schedule"],
-  "after_dependencies": ["http"],
   "config_flow": true,
   "codeowners": ["@coder89"],
-  "requirements": ["requests", "asyncio"],
+  "requirements": [],
   "iot_class": "cloud_polling",
   "platforms": ["climate", "water_heater", "sensor"]
 }

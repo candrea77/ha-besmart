@@ -11,7 +11,7 @@ tested with home-assistant >= 0.96
 
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta  # PATCH: timedelta for SCAN_INTERVAL
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -29,11 +29,11 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-DEPENDENCIES = ["schedule"]
-REQUIREMENTS = ["asyncio"]
+# PATCH: removed legacy module-level DEPENDENCIES / REQUIREMENTS / DEFAULT_TIMEOUT (dead code).
+# PATCH: added SCAN_INTERVAL to avoid polling the cloud API every 30s (HA default).
+SCAN_INTERVAL = timedelta(seconds=120)
 
 DEFAULT_NAME = "BeSMART Water Heater"
-DEFAULT_TIMEOUT = 3
 ENTITY_ID_FORMAT = PLATFORM_DOMAIN + ".{}"
 
 
@@ -264,4 +264,5 @@ class WaterHeater(WaterHeaterEntity):
             await self._cl.setBoilerMode(self._wifi_box, "0")
         else:
             await self._cl.setBoilerMode(self._wifi_box, "1")
-        _LOGGER.debug("Set operation mode=%s(%s)", str(mode))
+        # PATCH: was "Set operation mode=%s(%s)" with a single arg -> logging TypeError.
+        _LOGGER.debug("Set operation mode=%s", str(mode))

@@ -1,7 +1,9 @@
 import logging
 import asyncio
+from urllib.parse import quote  # PATCH: URL-encode credentials in login()
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed  # PATCH: surface auth failures
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,27 +47,25 @@ class BesmartClient(object):
         self._timeout = 30
         self._session = async_get_clientsession(hass, verify_ssl=False)
 
-    def _fahToCent(self, temp):
-        return str(round((temp - 32.0) / 1.8, 1))
-
-    def _centToFah(self, temp):
-        return str(round(32.0 + (temp * 1.8), 1))
+    # PATCH: removed unused _fahToCent()/_centToFah() helpers (dead code).
 
     async def login(self):
         try:
             url = self.BASE_URL + self.LOGIN.format(
-                username=self._username,
-                password=self._password,
+                # PATCH: URL-encode so passwords with & = + % # or spaces don't break the URL
+                username=quote(self._username, safe=""),
+                password=quote(self._password, safe=""),
             )
             async with asyncio.timeout(self._timeout):
                 res = await self._session.get(url)
 
             data = await res.json()
-            # TODO: check status
             error_code = data.get("error_code")
 
             if error_code == "6":
-                raise asyncio.web.HTTPUnauthorized()
+                # PATCH: was `raise asyncio.web.HTTPUnauthorized()` (AttributeError:
+                # asyncio has no `web`). Raise ConfigEntryAuthFailed to trigger HA reauth.
+                raise ConfigEntryAuthFailed("Invalid credentials.")
 
             if not res.ok:
                 res.raise_for_status()
@@ -74,6 +74,10 @@ class BesmartClient(object):
             self._user = message.get("user")
             _LOGGER.debug("login: {}".format(message))
             return list(map(lambda x: x.get("id"), message.get("wifi_box")))
+        except ConfigEntryAuthFailed:
+            # PATCH: don't swallow auth failures as generic warnings; let them propagate.
+            self._user = None
+            raise
         except Exception as ex:
             _LOGGER.warning(ex)
             self._user = None

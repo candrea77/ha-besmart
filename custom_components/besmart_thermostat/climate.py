@@ -11,7 +11,7 @@ tested with home-assistant >= 0.96
 
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta  # PATCH: timedelta for SCAN_INTERVAL
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -35,11 +35,13 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-DEPENDENCIES = ["schedule"]
-REQUIREMENTS = ["requests", "asyncio"]
+# PATCH: removed legacy module-level DEPENDENCIES / REQUIREMENTS / DEFAULT_TIMEOUT
+# (dead since the platform moved to config entries).
+# PATCH: added SCAN_INTERVAL. Cloud-side state refreshes roughly every ~3 minutes, so
+# polling every entity every 30s (the HA default) only hammered the API.
+SCAN_INTERVAL = timedelta(seconds=120)
 
 DEFAULT_NAME = "BeSMART Thermostat"
-DEFAULT_TIMEOUT = 3
 ENTITY_ID_FORMAT = PLATFORM_DOMAIN + ".{}"
 
 ATTR_MODE = "mode"
@@ -407,7 +409,9 @@ class Thermostat(ClimateEntity):
         elif hvac_mode in self._supported_modes:
             current_hvac_mode = self.hvac_mode
             if season != None and self._season != season:
-                await self._cl.setThermostatSeason(self._room_name, season)
+                # PATCH: was setThermostatSeason(self._room_name, season) -> only 2 of 3
+                # positional args, raised TypeError. Pass (wifi_box, thermostat, season).
+                await self._cl.setThermostatSeason(self._wifi_box, self._room_id, season)
             if current_hvac_mode == HVACMode.OFF:
                 await self.async_turn_on()
             _LOGGER.debug("Set hvac_mode hvac_mode=%s(%s)", str(hvac_mode), str(season))
@@ -426,9 +430,6 @@ class Thermostat(ClimateEntity):
             return
         
         _LOGGER.debug(f"setting new temp {self._tempSetMark} {self._room_name} {temperature}")
-        if self._tempSetMark == "2":
-            await self._cl.setThermostatTemp(self._wifi_box, self._room_id, temperature, self._tempSetMark)
-        elif self._tempSetMark == "1":
-            await self._cl.setThermostatTemp(self._wifi_box, self._room_id, temperature, self._tempSetMark)
-        elif self._tempSetMark == "0":
-            await self._cl.setThermostatTemp(self._wifi_box, self._room_id, temperature, self._tempSetMark)
+        # PATCH: collapsed three identical if/elif branches ("2"/"1"/"0") into one call;
+        # the mark itself selects which set-point is written.
+        await self._cl.setThermostatTemp(self._wifi_box, self._room_id, temperature, self._tempSetMark)

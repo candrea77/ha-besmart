@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-from http import HTTPStatus
-from requests import HTTPError
 
+# PATCH: removed unused imports (http.HTTPStatus, requests.HTTPError, const.Platform);
+# requests is no longer used anywhere (all I/O is aiohttp) and auth is handled below.
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    Platform,
     CONF_USERNAME,
     CONF_PASSWORD,
 )
@@ -35,12 +34,13 @@ async def async_setup_entry(
     client = BesmartClient(hass, besmart_config[CONF_USERNAME], besmart_config[CONF_PASSWORD])
 
     # 2. Validate the API connection (and authentication)
+    # PATCH: login() now raises ConfigEntryAuthFailed itself on bad credentials
+    # (error_code "6"); re-raise it so HA starts the reauth flow, everything else
+    # becomes ConfigEntryNotReady. Old code caught requests.HTTPError that was never raised.
     try:
         wifi_boxes = await client.login()
-    except HTTPError as ex:
-        if ex.response.status_code == HTTPStatus.UNAUTHORIZED:
-            raise ConfigEntryAuthFailed("Invalid credentials.") from ex
-        raise ConfigEntryNotReady from ex
+    except ConfigEntryAuthFailed:
+        raise
     except Exception as ex:
         raise ConfigEntryNotReady from ex
 
