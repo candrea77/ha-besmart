@@ -21,7 +21,22 @@
                     "verify_ssl": "Verify the BeSMART cloud TLS certificate. Disable only if login fails due to a broken/incomplete certificate chain.",
                     "scan_interval": "How often to poll the BeSMART cloud (the cloud itself refreshes roughly every 3 minutes)."
                 }
+            },
+            "reauth_confirm": {
+                "title": "Reauthenticate BeSMART",
+                "description": "The BeSMART cloud rejected the stored credentials for {name}. Enter them again.",
+                "data": {
+                    "username": "Username",
+                    "password": "Password"
+                }
             }
+        },
+        "error": {
+            "invalid_auth": "Invalid credentials.",
+            "cannot_connect": "Could not connect to the BeSMART cloud."
+        },
+        "abort": {
+            "reauth_successful": "Reauthentication was successful."
         }
     },
     "options": {
