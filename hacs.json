@@ -1,7 +1,5 @@
 {
   "name": "BeSMART Integration",
   "content_in_root": false,
-  "domains": ["climate", "water_heater", "sensor"],
-  "homeassistant": "2026.5.0",
-  "iot_class": ["Cloud Polling"]
+  "homeassistant": "2026.5.0"
 }

@@ -1,0 +1,88 @@
+name: Bug report
+description: Report a problem with the BeSMART integration
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill in as much as possible.
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "e.g. 2026.6.1"
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: BeSMART integration version
+      description: Visible in HACS or in Settings -> Devices & Services -> BeSMART.
+      placeholder: "e.g. 0.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: setup_type
+    attributes:
+      label: Setup type
+      options:
+        - Thermostat(s) + boiler
+        - Thermostat(s) only
+        - Boiler only
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Set ...
+        3. See error
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Settings -> System -> Logs, filter for "besmart". For more detail, enable debug logging first:
+        Settings -> Devices & Services -> BeSMART -> Enable debug logging, reproduce the issue, then disable it to download the log.
+        Credentials are automatically redacted by the integration, but double-check before pasting.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: |
+        Settings -> Devices & Services -> BeSMART -> three-dot menu -> Download diagnostics.
+        The file is automatically redacted (no credentials). Drag & drop it here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I have updated to the latest version of the integration before reporting.
+          required: true
+        - label: I have checked that the BeSMART mobile app works correctly (the cloud service is up).
+          required: false

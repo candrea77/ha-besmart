@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new feature or improvement for the BeSMART integration
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case, not only the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you imagine it working (new entity, new option, new service...)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: If the feature depends on cloud data, a redacted diagnostics dump showing the relevant fields helps a lot.
+    validations:
+      required: false

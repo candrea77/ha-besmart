@@ -1,7 +1,5 @@
 """Constants for the BeSMART Thermostat."""
 
-from datetime import timedelta
-
 from homeassistant.const import Platform
 
 DOMAIN = "besmart_thermostat"
@@ -29,5 +27,5 @@ MIN_SCAN_INTERVAL = 180
 MAX_SCAN_INTERVAL = 600
 SCAN_INTERVAL_STEP = 60
 
-# Fallback used if the stored value is somehow out of range / missing.
-UPDATE_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+# PATCH 0.5: removed unused UPDATE_INTERVAL timedelta (dead code; the
+# coordinator computes its interval from the option via _resolve_interval).

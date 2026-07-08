@@ -3,33 +3,30 @@
 Support for Riello's Besmart water heater controller.
 Be aware the thermostat may require more then 3 minute to refresh its states.
 
-version: 3 (DataUpdateCoordinator)
-tested with home-assistant >= 0.96
-
+version: 0.5 (DataUpdateCoordinator + RestoreEntity)
 """
 import logging
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.water_heater import WaterHeaterEntity, WaterHeaterEntityFeature
-from homeassistant.components.water_heater.const import DOMAIN as PLATFORM_DOMAIN
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     CONF_NAME,
     UnitOfTemperature,
 )
-from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import BesmartDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# PATCH: SCAN_INTERVAL removed; polling centralised in the coordinator.
-
 DEFAULT_NAME = "BeSMART Water Heater"
-ENTITY_ID_FORMAT = PLATFORM_DOMAIN + ".{}"
+
+ATTR_PREVIOUS_CLIMATE_ACTIVE = "previous_climate_active"
 
 
 async def async_setup_entry(
@@ -40,7 +37,8 @@ async def async_setup_entry(
     coordinator: BesmartDataUpdateCoordinator = config_entry.runtime_data
 
     new_entities = []
-    for device in config_entry.interface_devices:
+    # PATCH 0.5: topology now lives on the coordinator.
+    for device in coordinator.interface_devices:
         wifi_box = device.wifi_box
         new_entities.append(WaterHeater(coordinator, config_entry, wifi_box, device))
 
@@ -48,18 +46,14 @@ async def async_setup_entry(
         async_add_entities(new_entities)
 
 
-async def async_remove_entry(hass, entry) -> None:
-    """Handle removal of an entry."""
-
-
 # pylint: disable=abstract-method
 # pylint: disable=too-many-instance-attributes
-class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEntity):
+class WaterHeater(
+    CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEntity, RestoreEntity
+):
     """Representation of a Besmart water heater."""
 
     _attr_has_entity_name = True
-    _default_name = "Water Heater"
-    _entity_id_format = ENTITY_ID_FORMAT
     _attr_unique_id: str
 
     # BeSmart work_mode
@@ -86,6 +80,8 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
         self._flame_status = 0
         self._outdoor_temperature = 0.0
         self._system_pressure = 0.0
+        # PATCH 0.5: restored across restarts via RestoreEntity (see
+        # async_added_to_hass), so turn-on after a reboot picks the right mode.
         self._previous_climate_active = None
 
         if len(interface_device.thermostats) > 0:
@@ -99,18 +95,24 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
         # unique_id = <deviceID>:<wifiBox>:water_heater
         self._attr_unique_id = f"{self._entry_id}:{self._wifi_box}:water_heater"
 
+        # PATCH 0.5: removed the dead async_generate_entity_id call.
         self._attr_name = "Water Heater"
-
-        # entity_id = water_heater.<name>
-        self._entity_id = async_generate_entity_id(
-            self._entity_id_format, self._attr_name or self._default_name, None, coordinator.hass
-        )
 
         # Disable backwards compatibility for new turn_on/off methods
         self._enable_turn_on_off_backwards_compatibility = False
 
         # Populate initial state from coordinator data.
         self._update_attrs()
+
+    async def async_added_to_hass(self) -> None:
+        """Restore previous_climate_active after a restart."""
+        await super().async_added_to_hass()
+        if self._previous_climate_active is None:
+            last_state = await self.async_get_last_state()
+            if last_state is not None:
+                value = last_state.attributes.get(ATTR_PREVIOUS_CLIMATE_ACTIVE)
+                if isinstance(value, bool):
+                    self._previous_climate_active = value
 
     @property
     def _data(self):
@@ -132,10 +134,7 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
         if not boiler:
             return
 
-        try:
-            self._current_mode = boiler.get("work_mode", "2")
-        except (ValueError, TypeError):
-            self._current_mode = "2"
+        self._current_mode = boiler.get("work_mode", "2")
 
         try:
             self._tempSet = float(boiler.get("dhw_target_temp", 0.0))
@@ -148,7 +147,8 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
             self._current_temp = 0.0
 
         try:
-            self._flame_status = float(boiler.get("flame_status", 0))
+            # PATCH 0.5: flame_status is a discrete state, parse as int.
+            self._flame_status = int(float(boiler.get("flame_status", 0)))
         except (ValueError, TypeError):
             self._flame_status = 0
 
@@ -181,7 +181,7 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
 
     @property
     def precision(self):
-        """The temperature precision (defaults to 0.1deg C)."""
+        """The temperature precision."""
         return self.DHW_TEMP_PRECISION
 
     @property
@@ -230,6 +230,8 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
             "flame_status": self._flame_status,
             "outdoor_temperature": self._outdoor_temperature,
             "system_pressure": self._system_pressure,
+            # PATCH 0.5: exposed so RestoreEntity can persist it across restarts.
+            ATTR_PREVIOUS_CLIMATE_ACTIVE: self._previous_climate_active,
         }
 
     async def async_turn_on(self):
@@ -244,25 +246,30 @@ class WaterHeater(CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEn
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
 
-        if not temperature:
+        # PATCH 0.5: `if not temperature` also rejected 0; be explicit.
+        if temperature is None:
             return
 
-        await self._cl.setBoilerTemp(self._wifi_box, temperature)
+        ok = await self._cl.setBoilerTemp(self._wifi_box, temperature)
+        if not ok:
+            raise HomeAssistantError("Failed to set DHW temperature on BeSMART cloud")
         await self.coordinator.async_request_refresh()
 
     async def async_set_operation_mode(self, mode):
         """Set work mode (gas / off)."""
         if mode == self.STATE_OFF:
-            # PATCH: read thermostats from the coordinator instead of an extra
+            # Read thermostats from the coordinator instead of an extra
             # devices() API call.
             thermostats = (self.coordinator.data or {}).get(self._wifi_box, {}).get("thermostats", {})
             self._previous_climate_active = any(
                 x.get("mode") not in ("5", "4", 5, 4) for x in thermostats.values()
             )
-            await self._cl.setBoilerMode(self._wifi_box, "2")
+            ok = await self._cl.setBoilerMode(self._wifi_box, "2")
         elif self._previous_climate_active:
-            await self._cl.setBoilerMode(self._wifi_box, "0")
+            ok = await self._cl.setBoilerMode(self._wifi_box, "0")
         else:
-            await self._cl.setBoilerMode(self._wifi_box, "1")
+            ok = await self._cl.setBoilerMode(self._wifi_box, "1")
+        if not ok:
+            raise HomeAssistantError("Failed to set boiler mode on BeSMART cloud")
         _LOGGER.debug("Set operation mode=%s", str(mode))
         await self.coordinator.async_request_refresh()

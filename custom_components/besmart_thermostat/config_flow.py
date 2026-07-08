@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import (
     CONF_NAME,
     CONF_USERNAME,
@@ -14,6 +15,7 @@ from homeassistant.const import (
     CONF_MODE,
     CONF_VERIFY_SSL,
 )
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import selector
 from homeassistant.helpers.schema_config_entry_flow import (
     SchemaConfigFlowHandler,
@@ -21,6 +23,7 @@ from homeassistant.helpers.schema_config_entry_flow import (
 )
 from homeassistant.components.climate.const import HVACMode
 
+from .api import BesmartClient
 from .const import (
     DOMAIN,
     CONF_SCAN_INTERVAL,
@@ -61,6 +64,16 @@ CONFIG_SCHEMA = {
     **OPTIONS_SCHEMA,
 }
 
+# PATCH 0.5: schema shown during reauthentication (credentials only).
+REAUTH_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_USERNAME): selector.TextSelector(),
+        vol.Required(CONF_PASSWORD): selector.TextSelector(
+            {"type": selector.TextSelectorType.PASSWORD}
+        ),
+    }
+)
+
 
 CONFIG_FLOW = {
     "user": SchemaFlowFormStep(vol.Schema(CONFIG_SCHEMA)),
@@ -82,3 +95,50 @@ class ConfigFlowHandler(SchemaConfigFlowHandler, domain=DOMAIN):
     def async_config_entry_title(self, options: Mapping[str, Any]) -> str:
         """Return config entry title."""
         return cast(str, options[CONF_NAME])
+
+    # PATCH 0.5: reauth support. The coordinator raises ConfigEntryAuthFailed
+    # on error_code "6"; without these steps HA showed the "reauthentication
+    # required" repair but clicking it failed because no reauth step existed.
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle reauthentication request."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for new credentials and validate them."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            client = BesmartClient(
+                self.hass,
+                user_input[CONF_USERNAME],
+                user_input[CONF_PASSWORD],
+                entry.options.get(CONF_VERIFY_SSL, False),
+            )
+            try:
+                await client.login()
+            except ConfigEntryAuthFailed:
+                errors["base"] = "invalid_auth"
+            except Exception:  # pylint: disable=broad-except
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    options={
+                        **entry.options,
+                        CONF_USERNAME: user_input[CONF_USERNAME],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=REAUTH_SCHEMA,
+            description_placeholders={"name": entry.title},
+            errors=errors,
+        )
