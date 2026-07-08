@@ -19,7 +19,9 @@ from .device import BesmartInterfaceDevice
 from .api import BesmartClient
 from .coordinator import BesmartDataUpdateCoordinator
 
-# runtime_data now holds the coordinator (it exposes .client for write commands).
+# runtime_data holds the coordinator, which owns both the API client (for
+# write commands) and the interface devices (topology).
+# PATCH 0.5: no more custom attributes on ConfigEntry (deprecated by HA).
 type BesmartConfigEntry = ConfigEntry[BesmartDataUpdateCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +38,13 @@ async def async_setup_entry(
     # Legacy entries created before this option keep the old behaviour (no
     # verification); new entries default to True via the config flow schema.
     verify_ssl = besmart_config.get(CONF_VERIFY_SSL, False)
+    if not verify_ssl:
+        # PATCH 0.5: make the insecure legacy mode visible in the logs.
+        _LOGGER.warning(
+            "TLS certificate verification for the BeSMART cloud is DISABLED. "
+            "Enable 'Verify TLS certificate' in the integration options unless "
+            "login fails because of a broken certificate chain."
+        )
     client = BesmartClient(
         hass,
         besmart_config[CONF_USERNAME],
@@ -58,10 +67,10 @@ async def async_setup_entry(
         if devices is None:
             raise ConfigEntryNotReady(f"No data for wifi box {wifi_box}")
         interface_devices.append(BesmartInterfaceDevice(hass, entry, wifi_box, devices))
-    entry.interface_devices = interface_devices
 
-    # 4. Create the coordinator and do the first refresh before adding entities.
-    coordinator = BesmartDataUpdateCoordinator(hass, entry, client)
+    # 4. Create the coordinator (owns client + topology) and do the first
+    #    refresh before adding entities.
+    coordinator = BesmartDataUpdateCoordinator(hass, entry, client, interface_devices)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
