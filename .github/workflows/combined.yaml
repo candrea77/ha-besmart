@@ -1,30 +1,30 @@
-name: "Validation And Formatting"
+name: "Validation"
+
 on:
   push:
   pull_request:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
+
 jobs:
-  ci:
+  hassfest:
+    name: "Hassfest validation"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        name: Download repo
+      - name: Download repo
+        uses: actions/checkout@v4
+
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: "HACS validation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repo
+        uses: actions/checkout@v4
+
+      - name: HACS validation
+        uses: hacs/action@main
         with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v2
-        name: Setup Python
-      - uses: actions/cache@v2
-        name: Cache
-        with:
-          path: |
-            ~/.cache/pip
-          key: custom-component-ci
-      - uses: hacs/integration/action@main
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CATEGORY: integration
-      - uses: KTibow/ha-blueprint@stable
-        name: CI
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          category: integration
