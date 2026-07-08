@@ -9,12 +9,15 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
-from .models import WifiBox, Devices
+from .models import Devices
+
 
 class BesmartInterfaceDevice:
     """Class for BeSMART WiFi Box handling."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, wifi_box: WifiBox, devices: Devices) -> None:
+    # PATCH 0.5: wifi_box is a plain string id (the old WifiBox TypedDict hint
+    # was wrong: the code always passes the id string, not a dict).
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, wifi_box: str, devices: Devices) -> None:
         """Initialize interface device class."""
         device_registry = dr.async_get(hass)
 
