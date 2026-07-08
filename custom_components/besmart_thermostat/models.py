@@ -1,8 +1,15 @@
-from typing import List, Dict, TypedDict
+"""Shared typed structures for the BeSMART integration."""
 
-class WifiBox(TypedDict):
-    id: str
+from __future__ import annotations
+
+from typing import TypedDict
+
 
 class Devices(TypedDict):
-    boiler: Dict
-    thermostats: List[Dict]
+    """Payload returned by BesmartClient.devices()."""
+
+    # PATCH 0.5: boiler can legitimately be None (thermostat-only setups);
+    # removed the unused/incorrect WifiBox TypedDict (wifi box ids are plain
+    # strings everywhere in the code).
+    boiler: dict | None
+    thermostats: list[dict]
