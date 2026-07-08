@@ -3,7 +3,14 @@
 A single coordinator per config entry fetches, once per cycle, the boiler data
 and every thermostat's data for all WiFi boxes. All entities (climate,
 water_heater, sensor) then read from ``coordinator.data`` instead of polling the
-cloud API independently every 30s.
+cloud API independently.
+
+PATCH 0.5:
+- The topology (interface devices) now lives on the coordinator itself instead
+  of being stored as a custom attribute on ConfigEntry (which Home Assistant is
+  deprecating / blocking).
+- Boiler + thermostat requests for each wifi box are fetched concurrently with
+  asyncio.gather to shorten the update cycle.
 
 data layout:
     {
@@ -17,6 +24,7 @@ data layout:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -57,9 +65,12 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         client: BesmartClient,
+        interface_devices: list,
     ) -> None:
         """Initialize the coordinator."""
         self.client = client
+        # PATCH 0.5: topology owned by the coordinator (see module docstring).
+        self.interface_devices = interface_devices
         super().__init__(
             hass,
             _LOGGER,
@@ -82,24 +93,34 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         previous: BesmartData = self.data or {}
         result: BesmartData = {}
 
-        # Topology (which wifi boxes / thermostats exist) is static, taken from
-        # the interface devices built at setup time.
-        for device in getattr(self.config_entry, "interface_devices", []):
+        for device in self.interface_devices:
             wifi_box = device.wifi_box
             prev_box = previous.get(wifi_box, {})
 
-            boiler = await self.client.boiler(wifi_box)
-            if boiler is None:
+            room_ids = [
+                t.get("id") for t in device.thermostats if t.get("id") is not None
+            ]
+
+            # PATCH 0.5: fetch boiler + all thermostats of this box concurrently.
+            responses = await asyncio.gather(
+                self.client.boiler(wifi_box),
+                *[self.client.thermostat(wifi_box, rid) for rid in room_ids],
+                return_exceptions=True,
+            )
+
+            # ConfigEntryAuthFailed must always propagate (-> reauth flow).
+            for resp in responses:
+                if isinstance(resp, ConfigEntryAuthFailed):
+                    raise resp
+
+            boiler = responses[0]
+            if isinstance(boiler, Exception) or boiler is None:
                 # Transient error: keep the previous snapshot (no flapping).
                 boiler = prev_box.get("boiler")
 
             thermostats: dict[str, dict] = {}
-            for thermostat in device.thermostats:
-                room_id = thermostat.get("id")
-                if room_id is None:
-                    continue
-                data = await self.client.thermostat(wifi_box, room_id)
-                if data is None:
+            for room_id, data in zip(room_ids, responses[1:]):
+                if isinstance(data, Exception) or data is None:
                     data = prev_box.get("thermostats", {}).get(room_id)
                 if data is not None:
                     thermostats[room_id] = data
