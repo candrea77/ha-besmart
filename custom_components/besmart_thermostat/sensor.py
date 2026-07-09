@@ -1,9 +1,12 @@
 """Sensors for the BeSMART integration.
 
 - Battery status (enum) per thermostat, read from the coordinator data.
-- PATCH 0.5: boiler system pressure and outdoor probe temperature exposed as
-  real sensors (previously only attributes of the water heater), so they can be
-  graphed and used in automations directly.
+- 0.5: boiler system pressure and outdoor probe temperature exposed as real
+  sensors (previously only attributes of the water heater).
+- PATCH 0.6: boiler water temperature (central heating flow temperature,
+  cloud key ``heating_current_temp``) and one temperature sensor per
+  thermostat (cloud key ``current_temp``), created dynamically like the
+  battery sensors.
 """
 
 import logging
@@ -47,7 +50,6 @@ async def async_setup_entry(
     coordinator: BesmartDataUpdateCoordinator = config_entry.runtime_data
 
     new_entities = []
-    # PATCH 0.5: topology now lives on the coordinator.
     for device in coordinator.interface_devices:
         wifi_box = device.wifi_box
         for thermostat in device.thermostats:
@@ -56,15 +58,22 @@ async def async_setup_entry(
             new_entities.append(
                 BatteryStatusSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.device_info)
             )
+            # PATCH 0.6: room temperature measured by each thermostat.
+            new_entities.append(
+                ThermostatTemperatureSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.device_info)
+            )
 
-        # PATCH 0.5: boiler sensors, only if this wifi box actually reports a
-        # boiler.
+        # Boiler sensors, only if this wifi box actually reports a boiler.
         if device.boiler is not None:
             new_entities.append(
                 BoilerSystemPressureSensor(coordinator, config_entry, wifi_box, device.device_info)
             )
             new_entities.append(
                 BoilerOutdoorTemperatureSensor(coordinator, config_entry, wifi_box, device.device_info)
+            )
+            # PATCH 0.6: central heating flow (water) temperature.
+            new_entities.append(
+                BoilerWaterTemperatureSensor(coordinator, config_entry, wifi_box, device.device_info)
             )
 
     if new_entities:
@@ -112,6 +121,56 @@ class BatteryStatusSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Senso
             BatteryStates.Good: "mdi:battery",
             BatteryStates.Unknown: "mdi:battery-unknown",
         }.get(self.native_value, "mdi:battery-unknown")
+
+
+class ThermostatTemperatureSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], SensorEntity):
+    """PATCH 0.6: temperature measured by a BeSMART thermostat.
+
+    Same value shown by the climate entity, exposed as a standalone sensor for
+    easier graphing, statistics and use in automations.
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator, config_entry, wifi_box, room_id, room_name, device_info):
+        """Initialize the thermostat temperature sensor."""
+        super().__init__(coordinator)
+        self._wifi_box = wifi_box
+        self._room_id = room_id
+        self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_temperature"
+        self._attr_name = f"{room_name} Temperature"
+        self._attr_device_info = device_info
+
+    @property
+    def _data(self):
+        return self.coordinator.thermostat_data(self._wifi_box, self._room_id)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._data is not None
+
+    @property
+    def native_value(self):
+        """Return the measured temperature, or None when missing/unparsable."""
+        data = self._data or {}
+        value = data.get("current_temp")
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def native_unit_of_measurement(self):
+        """Follow the unit reported by the thermostat (0 = Celsius)."""
+        data = self._data or {}
+        if str(data.get("unit", "0")) == "0":
+            return UnitOfTemperature.CELSIUS
+        return UnitOfTemperature.FAHRENHEIT
 
 
 class BesmartBoilerSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], SensorEntity):
@@ -164,6 +223,27 @@ class BoilerOutdoorTemperatureSensor(BesmartBoilerSensor):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
     _attr_name = "Outdoor Temperature"
+
+    @property
+    def native_unit_of_measurement(self):
+        """Follow the unit reported by the boiler (0 = Celsius)."""
+        data = self.coordinator.boiler_data(self._wifi_box) or {}
+        if data.get("unit", "0") == "0":
+            return UnitOfTemperature.CELSIUS
+        return UnitOfTemperature.FAHRENHEIT
+
+
+class BoilerWaterTemperatureSensor(BesmartBoilerSensor):
+    """PATCH 0.6: central heating flow (water) temperature.
+
+    Cloud key ``heating_current_temp``: temperature of the water sent by the
+    boiler to the heating circuit.
+    """
+
+    DATA_KEY = "heating_current_temp"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_suggested_display_precision = 1
+    _attr_name = "Boiler Water Temperature"
 
     @property
     def native_unit_of_measurement(self):
