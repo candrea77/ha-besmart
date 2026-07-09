@@ -8,6 +8,8 @@ PLATFORMS: list[Platform] = [
     Platform.CLIMATE,
     Platform.WATER_HEATER,
     Platform.SENSOR,
+    # PATCH 0.6: new binary_sensor platform (boiler flame, circulator, DHW tap).
+    Platform.BINARY_SENSOR,
 ]
 
 # --- Config / options keys -------------------------------------------------
