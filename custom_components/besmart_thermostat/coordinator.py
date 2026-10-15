@@ -17,8 +17,11 @@ PATCH 0.7:
   only). It is optional: a failure yields None for that cycle (no fallback to
   the previous value, since modulation changes quickly) and never fails the
   update on its own.
-- Boilers/technical_datas is NOT polled: it is read on demand (button entity)
-  via async_read_technical() and kept in ``self.technical``.
+- Technical data is NOT polled: the single-value technical endpoints are read
+  on demand (button entity) via async_read_technical() and kept in
+  ``self.technical``.
+- async_manual_refresh() backs the "Refresh now" button: one refresh at a time
+  and presses within MANUAL_REFRESH_COOLDOWN seconds are ignored.
 
 data layout:
     {
@@ -36,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -53,6 +57,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# PATCH 0.7: minimum seconds between two accepted "Refresh now" presses.
+MANUAL_REFRESH_COOLDOWN = 10
 
 type BesmartData = dict[str, dict]
 
@@ -82,9 +89,13 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         # PATCH 0.5: topology owned by the coordinator (see module docstring).
         self.interface_devices = interface_devices
         # PATCH 0.7: on-demand technical data per wifi box:
-        # {wifi_box: {"values": {...}, "last_read": datetime}}.
+        # {wifi_box: {"values": {endpoint: raw}, "modulation": raw,
+        #             "unsupported": [...], "last_read": datetime}}.
         self.technical: dict[str, dict] = {}
         self._technical_locks: dict[str, asyncio.Lock] = {}
+        # PATCH 0.7: "Refresh now" button state.
+        self._manual_refresh_lock = asyncio.Lock()
+        self._last_manual_refresh: float | None = None
         super().__init__(
             hass,
             _LOGGER,
@@ -102,7 +113,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         except ConfigEntryAuthFailed:
             raise
         except Exception as ex:  # pylint: disable=broad-except
-            raise UpdateFailed(f"Login failed: {ex}") from ex
+            # PATCH 0.7: redacted, the message may contain the login URL.
+            raise UpdateFailed(f"Login failed: {self.client._redact(str(ex))}") from ex
 
         previous: BesmartData = self.data or {}
         result: BesmartData = {}
@@ -188,23 +200,56 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         return self.technical.get(wifi_box)
 
     async def async_read_technical(self, wifi_box: str) -> None:
-        """PATCH 0.7: read Boilers/technical_datas once (button press).
+        """PATCH 0.7: read the technical endpoints once (button press).
 
-        On failure raises HomeAssistantError (shown in the UI) and keeps the
-        previous reading untouched. A per-box lock collapses repeated presses.
+        Endpoints that fail are stored as missing (None attributes). Raises
+        HomeAssistantError (shown in the UI) only when none answered, keeping
+        the previous reading untouched. A per-box lock collapses repeated
+        presses. The modulation is taken from the polled data, not re-read.
         """
         lock = self._technical_locks.setdefault(wifi_box, asyncio.Lock())
         if lock.locked():
             _LOGGER.debug("technical data read already in progress, ignoring press")
             return
         async with lock:
-            values = await self.client.boiler_technical(wifi_box)
-            if values is None:
+            try:
+                values = await self.client.boiler_technical(wifi_box)
+            except ConfigEntryAuthFailed:
+                raise
+            except Exception as ex:  # pylint: disable=broad-except
+                raise HomeAssistantError(
+                    f"Could not read technical data: {self.client._redact(str(ex))}"
+                ) from ex
+            if not values:
                 raise HomeAssistantError(
                     "Could not read technical data from the BeSMART cloud"
                 )
             self.technical[wifi_box] = {
                 "values": values,
+                "modulation": self.modulation(wifi_box),
+                "unsupported": sorted(self.client.unsupported_endpoints),
                 "last_read": dt_util.utcnow(),
             }
         self.async_update_listeners()
+
+    async def async_manual_refresh(self) -> None:
+        """PATCH 0.7: immediate refresh of all polled data ("Refresh now").
+
+        Ignored while a manual refresh is running or within
+        MANUAL_REFRESH_COOLDOWN seconds of the last accepted press. On failure
+        raises HomeAssistantError; entities behave as after a failed poll.
+        """
+        now = monotonic()
+        if self._manual_refresh_lock.locked() or (
+            self._last_manual_refresh is not None
+            and now - self._last_manual_refresh < MANUAL_REFRESH_COOLDOWN
+        ):
+            _LOGGER.debug("manual refresh ignored (in progress or pressed too soon)")
+            return
+        self._last_manual_refresh = now
+        async with self._manual_refresh_lock:
+            await self.async_refresh()
+        if not self.last_update_success:
+            raise HomeAssistantError(
+                f"BeSMART refresh failed: {self.last_exception or 'no data from the cloud'}"
+            )

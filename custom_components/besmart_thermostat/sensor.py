@@ -8,9 +8,9 @@
   thermostat (cloud key ``current_temp``), created dynamically like the
   battery sensors.
 - PATCH 0.7: "Boiler Modulation" (%) polled from Boilers/modulation_ratio, and
-  a single "Technical data" sensor holding the last on-demand reading of
-  Boilers/technical_datas (triggered by the "Read technical data" button) as
-  attributes, with the reading time as state.
+  a single "Technical data" sensor holding the last on-demand reading of the
+  single-value technical endpoints (triggered by the "Read technical data"
+  button) as attributes, with the reading time as state.
 """
 
 import logging
@@ -301,54 +301,58 @@ class BoilerModulationSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Se
         return parse_value(self.coordinator.modulation(self._wifi_box))
 
 
-# PATCH 0.7: technical_datas cloud key -> attribute name. Numeric values go
-# through parse_value() (invalid -> None, "0.0" -> 0.0). Note: the cloud's
-# "flame_hours" is the app's heat exchanger cleaning counter, not burner hours.
+# PATCH 0.7 (b2): technical endpoint -> attribute name. Numeric values go
+# through parse_value() (invalid -> None, "0.0" -> 0.0); endpoints that failed
+# or are unsupported give None. heat_exchanger_hours_amassed is the app's
+# "heat exchanger cleaning" counter, not burner hours.
 TECHNICAL_NUMERIC_ATTRIBUTES = {
-    "modu_ratio": "modulation_pct",
-    "pressure": "pressure_bar",
-    "flow_temp_low": "flow_temperature",
-    "return_temp": "return_temperature",
-    "flue_temp": "flue_temperature",
-    "dome_hot_temp": "dhw_temperature",
-    "dome_hot_point": "dhw_hot_point",
-    "dome_hot_rate": "dhw_flow_rate",
-    "flame_hours": "heat_exchanger_hours",
-    "heat_hours": "heating_hours",
-    "domestic_hours": "dhw_hours",
-    "temp_out": "outdoor_temperature",
-    "room_temp": "room_temperature",
-    "temp_now": "temperature_now",
-    "temp_target": "temperature_target",
-    "tsp": "tsp",
+    "system_pressure": "pressure_bar",
+    "flow_temperature": "flow_temperature",
+    "return_temperature": "return_temperature",
+    "flues_temperature": "flue_temperature",
+    "dhw_temperature": "dhw_temperature",
+    "dhw_set_point": "dhw_set_point",
+    "heating_set_point": "heating_set_point",
+    "dhw_flow_rate": "dhw_flow_rate",
+    "external_temperature": "outdoor_temperature",
+    "heat_exchanger_hours_amassed": "heat_exchanger_hours",
+    "worked_hours_in_heating": "heating_hours",
+    "worked_hours_in_dhw": "dhw_hours",
 }
 TECHNICAL_ATTRIBUTE_NAMES = (
+    "modulation_pct",
     *TECHNICAL_NUMERIC_ATTRIBUTES.values(),
     "flame",
     "temperature_unit",
+    "unsupported_endpoints",
 )
 
 
-def technical_attributes(values: dict) -> dict:
-    """PATCH 0.7: convert a technical_datas payload into entity attributes."""
-    attrs = {
-        attr: parse_value(values.get(key))
-        for key, attr in TECHNICAL_NUMERIC_ATTRIBUTES.items()
-    }
-    fire = parse_value(values.get("fire"))
-    attrs["flame"] = None if fire is None else bool(fire)
-    unit = str(values.get("unit", "")).strip()
+def technical_attributes(reading: dict) -> dict:
+    """PATCH 0.7: convert a stored technical reading into entity attributes."""
+    values = reading.get("values") or {}
+    attrs = {"modulation_pct": parse_value(reading.get("modulation"))}
+    attrs.update(
+        {
+            attr: parse_value(values.get(endpoint))
+            for endpoint, attr in TECHNICAL_NUMERIC_ATTRIBUTES.items()
+        }
+    )
+    flame = parse_value(values.get("flame_status"))
+    attrs["flame"] = None if flame is None else bool(int(flame))
+    unit = parse_value(values.get("unit"))
     attrs["temperature_unit"] = {
-        "0": UnitOfTemperature.CELSIUS,
-        "1": UnitOfTemperature.FAHRENHEIT,
-    }.get(unit)
+        0: UnitOfTemperature.CELSIUS,
+        1: UnitOfTemperature.FAHRENHEIT,
+    }.get(None if unit is None else int(unit))
+    attrs["unsupported_endpoints"] = list(reading.get("unsupported") or [])
     return attrs
 
 
 class BoilerTechnicalDataSensor(
     CoordinatorEntity[BesmartDataUpdateCoordinator], RestoreEntity, SensorEntity
 ):
-    """PATCH 0.7: last on-demand reading of Boilers/technical_datas.
+    """PATCH 0.7: last on-demand reading of the technical endpoints.
 
     State: time of the last successful reading. Attributes: the parsed values.
     Never polled: it only changes when the "Read technical data" button is
@@ -401,5 +405,5 @@ class BoilerTechnicalDataSensor(
         """Return the parsed technical values of the last reading."""
         reading = self.coordinator.technical_data(self._wifi_box)
         if reading is not None:
-            return technical_attributes(reading["values"])
+            return technical_attributes(reading)
         return self._restored_attrs or None

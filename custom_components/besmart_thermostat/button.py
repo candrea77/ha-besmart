@@ -1,8 +1,13 @@
 """Buttons for the BeSMART integration.
 
-PATCH 0.7: "Read technical data" button. Each press reads
-Boilers/technical_datas once (read-only GET) and stores the result in the
-"Technical data" sensor. The endpoint is never polled.
+PATCH 0.7:
+- "Read technical data" (per boiler): each press reads the single-value
+  technical endpoints once (read-only GETs) and stores the result in the
+  "Technical data" sensor. They are never polled.
+- "Refresh now" (one per entry): immediate refresh of all polled data
+  (boiler, thermostats, modulation). Repeated presses within a few seconds
+  are ignored. The cloud itself refreshes the module data roughly every 3
+  minutes, so a forced refresh may still return unchanged values.
 """
 
 import logging
@@ -32,6 +37,11 @@ async def async_setup_entry(
         # Only if this wifi box actually reports a boiler.
         if device.boiler is not None
     ]
+    # One refresh button per entry: the coordinator refreshes every wifi box.
+    if coordinator.interface_devices:
+        new_entities.append(
+            RefreshNowButton(coordinator, config_entry, coordinator.interface_devices[0].device_info)
+        )
 
     if new_entities:
         async_add_entities(new_entities)
@@ -53,5 +63,23 @@ class ReadTechnicalDataButton(ButtonEntity):
         self._attr_device_info = device_info
 
     async def async_press(self) -> None:
-        """Read Boilers/technical_datas (raises HomeAssistantError on failure)."""
+        """Read the technical endpoints (HomeAssistantError if none answers)."""
         await self._coordinator.async_read_technical(self._wifi_box)
+
+
+class RefreshNowButton(ButtonEntity):
+    """Refresh all polled data immediately."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "refresh_now"
+    _attr_icon = "mdi:refresh"
+
+    def __init__(self, coordinator, config_entry, device_info):
+        """Initialize the button."""
+        self._coordinator = coordinator
+        self._attr_unique_id = f"{config_entry.entry_id}:refresh_now"
+        self._attr_device_info = device_info
+
+    async def async_press(self) -> None:
+        """Refresh now (HomeAssistantError if the refresh fails)."""
+        await self._coordinator.async_manual_refresh()

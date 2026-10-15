@@ -18,13 +18,20 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    user id, the username and the password are part of request URLs and
    therefore of aiohttp exception messages. Every log line or exception text
    that may contain a URL or a cloud payload must go through
-   `BesmartClient._redact()`. Never log full URLs or the login payload.
+   `BesmartClient._redact()` (which also reduces the wifi box id to its last
+   4 characters). Never log full URLs or the login payload.
    `diagnostics.py` must keep redacting `token`, `user_id`, `email` and the
    credentials.
 4. **Optional endpoints must fail soft.** Extra reads (e.g.
-   `Boilers/modulation_ratio`, `Boilers/technical_datas`) must never make the
-   other entities unavailable, never fail the coordinator update on their own,
-   and never reset `self._user` (which would force a re-login every cycle).
+   `Boilers/modulation_ratio`, the single-value technical endpoints in
+   `BesmartClient.TECHNICAL_ENDPOINTS`) must never make the other entities
+   unavailable, never fail the coordinator update on their own, and never
+   reset `self._user` (which would force a re-login every cycle).
+   `Boilers/technical_datas` no longer exists (404): do not use it.
+5. **Don't hammer the cloud.** No new polled calls without the maintainer's
+   approval; technical endpoints are read only on button press (max 3
+   concurrent, 5 s timeout, 3 attempts, no retry on 404). The cloud refreshes
+   module data only every ~3 minutes.
 
 ## Architecture
 
@@ -47,4 +54,6 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
   (HACS release notes). Pre-releases use `X.Y.ZbN` and a `vX.Y.ZbN` tag
   published as a GitHub pre-release.
 - Release branches are named `release-vX.Y`.
-- CI (`.github/workflows/combined.yaml`) runs hassfest and HACS validation.
+- CI (`.github/workflows/combined.yaml`) runs hassfest, HACS validation and
+  `pytest tests` (deps in `requirements_test.txt`). Tests never hit the real
+  cloud: use the fakes in `tests/conftest.py`.

@@ -3,6 +3,9 @@
         "button": {
             "read_technical_data": {
                 "name": "Leggi dati tecnici"
+            },
+            "refresh_now": {
+                "name": "Aggiorna ora"
             }
         },
         "sensor": {

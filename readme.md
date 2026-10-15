@@ -13,6 +13,21 @@ Using HACS, add the custom repository, selecting **"Integration"** as the value 
 
 Once the repository has been successfully added, go to **Settings** → **Devices & services** → **Add Integration**, select **BeSmart**, and complete the required settings.
 
+## Buttons
+
+- **Refresh now** — immediately refreshes all polled data (boiler, thermostats,
+  boiler modulation) instead of waiting for the next update interval. Presses
+  less than 10 seconds apart, or while a refresh is running, are ignored.
+  **Note:** the BeSMART cloud receives fresh data from the WiFi module only
+  about every 3 minutes, so a forced refresh may still return values that have
+  not been updated yet.
+- **Read technical data** (diagnostic, boilers only) — reads the boiler
+  technical values once (pressure, flow/return/flue temperatures, DHW values,
+  flame, operating hours, …) and stores them as attributes of the
+  **Technical data** sensor. These values are never polled. Endpoints the cloud
+  does not support for your boiler are listed in the `unsupported_endpoints`
+  attribute.
+
 ## Contribute
 
 Contributions are always welcome!

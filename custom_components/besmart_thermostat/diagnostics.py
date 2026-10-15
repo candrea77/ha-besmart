@@ -35,10 +35,10 @@ async def async_get_config_entry_diagnostics(
         "entry_options": async_redact_data(dict(entry.options), TO_REDACT),
         "coordinator_data": async_redact_data(coordinator.data or {}, TO_REDACT),
         "wifi_boxes": [device.wifi_box for device in coordinator.interface_devices],
-        # PATCH 0.7: last on-demand Boilers/technical_datas reading per box.
+        # PATCH 0.7: last on-demand technical reading per box.
         "technical_data": async_redact_data(
             {
-                box: {"values": t["values"], "last_read": t["last_read"].isoformat()}
+                box: {**t, "last_read": t["last_read"].isoformat()}
                 for box, t in coordinator.technical.items()
             },
             TO_REDACT,

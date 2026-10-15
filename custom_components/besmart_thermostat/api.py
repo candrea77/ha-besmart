@@ -4,6 +4,7 @@ import logging
 import re
 from urllib.parse import quote  # URL-encode credentials in login()
 
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -14,6 +15,12 @@ _LOGGER = logging.getLogger(__name__)
 # ".../user_id/12345/..." or "...?user_id=12345". The id itself is matched by
 # position, never by value, so short numeric ids can't mangle other text.
 _USER_ID_RE = re.compile(r"(user_id[/=])[^/&?\s'\"]+")
+# PATCH 0.7: wifi box id in URLs: keep only the last 4 characters.
+_WIFI_BOX_RE = re.compile(r"(wifi_box_id[/=])[^/&?\s'\"]*?([^/&?\s'\"]{0,4})(?=[/&?\s'\"]|$)")
+
+# PATCH 0.7: Boilers/data keys describing the boiler state, logged raw (debug)
+# to compare with the official app (flame/heating/DHW status).
+_STATE_KEY_RE = re.compile(r"flame|fire|status|active|mode|work|state", re.IGNORECASE)
 
 # PATCH 0.7: values the cloud uses for "no data" (in addition to empty/None).
 _INVALID_VALUES = {"", "null", "none", "dncon"}
@@ -61,7 +68,31 @@ class BesmartClient:
     # PATCH 0.7: read-only technical endpoints (see CLAUDE.md: never write
     # Boilers/TSP, never call Boilers/reset).
     GET_BOILER_MODULATION = "Android/Boilers/modulation_ratio/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
-    GET_BOILER_TECHNICAL = "Android/Boilers/technical_datas/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
+    # PATCH 0.7 (b2): single-value technical endpoints, read on demand by the
+    # "Read technical data" button. Boilers/technical_datas no longer exists
+    # (404). Only names from TECHNICAL_ENDPOINTS are ever formatted in.
+    GET_BOILER_VALUE = "Android/Boilers/{endpoint}/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
+    TECHNICAL_ENDPOINTS = (
+        "system_pressure",
+        "flow_temperature",
+        "return_temperature",
+        "flues_temperature",
+        "dhw_temperature",
+        "dhw_set_point",
+        "heating_set_point",
+        "dhw_flow_rate",
+        "flame_status",
+        "external_temperature",
+        "heat_exchanger_hours_amassed",
+        "worked_hours_in_heating",
+        "worked_hours_in_dhw",
+        "unit",
+    )
+    # Same limits as the official app's technical area.
+    TECHNICAL_CONCURRENCY = 3
+    TECHNICAL_TIMEOUT = 5
+    TECHNICAL_ATTEMPTS = 3
+    TECHNICAL_RETRY_DELAY = 1
     SET_BOILER_MODE = "Android/Boilers/work_mode"
     SET_BOILER_DHW_TEMP = "Android/Boilers/dhw_target_temp"
 
@@ -80,6 +111,9 @@ class BesmartClient:
         # PATCH 0.5: lock to serialise login() when multiple write commands run
         # concurrently (e.g. two set_temperature from an automation).
         self._login_lock = asyncio.Lock()
+        # PATCH 0.7: technical endpoints that answered 404 (not supported by
+        # the cloud / this boiler). Skipped on later presses until reload.
+        self.unsupported_endpoints: set[str] = set()
         # verify_ssl is a config option. async_get_clientsession caches one
         # session per verify_ssl flag, so True reuses HA's shared verified
         # session and False uses an isolated no-verify session.
@@ -96,7 +130,8 @@ class BesmartClient:
         messages verbatim.
 
         PATCH 0.7: data URLs also embed the API token and the user id, so
-        those are stripped too.
+        those are stripped too; the wifi box id is reduced to its last 4
+        characters.
         """
         for secret in (
             quote(self._password, safe=""),
@@ -107,7 +142,8 @@ class BesmartClient:
         ):
             if secret:
                 text = text.replace(secret, "***")
-        return _USER_ID_RE.sub(r"\1***", text)
+        text = _USER_ID_RE.sub(r"\1***", text)
+        return _WIFI_BOX_RE.sub(r"\1***\2", text)
 
     # ------------------------------------------------------------------ login
 
@@ -281,7 +317,16 @@ class BesmartClient:
                 res.raise_for_status()
 
             message = data.get("message")
-            _LOGGER.debug("boiler data: %s", message)
+            _LOGGER.debug("boiler data: %s", self._redact(str(message)))
+            # PATCH 0.7: raw state fields (flame/heating/DHW), to compare with
+            # the official app when a binary sensor looks wrong.
+            if isinstance(message, dict):
+                _LOGGER.debug(
+                    "boiler state fields: %s",
+                    self._redact(str({
+                        k: v for k, v in message.items() if _STATE_KEY_RE.search(str(k))
+                    })),
+                )
             return message
         except ConfigEntryAuthFailed:
             raise
@@ -342,15 +387,77 @@ class BesmartClient:
         _LOGGER.debug("boiler modulation: %s", message.get("value"))
         return message.get("value")
 
-    async def boiler_technical(self, wifi_box: str):
-        """PATCH 0.7: return the technical_datas dict (read on demand), or None."""
-        message = await self._optional_get(
-            "boiler_technical", self.GET_BOILER_TECHNICAL, wifi_box
+    async def boiler_technical(self, wifi_box: str) -> dict:
+        """PATCH 0.7 (b2): read every technical endpoint once (button press).
+
+        Returns {endpoint: raw value} for the endpoints that answered; failed
+        or unsupported ones are absent (the caller exposes them as None).
+        At most TECHNICAL_CONCURRENCY requests run at once, each with a
+        TECHNICAL_TIMEOUT s timeout and up to TECHNICAL_ATTEMPTS attempts on
+        timeouts, connection errors and 5xx. A 404 is never retried: the
+        endpoint is recorded in ``unsupported_endpoints``, logged once at
+        debug level and skipped afterwards. Never resets ``self._user``.
+        """
+        await self._ensure_login()
+        semaphore = asyncio.Semaphore(self.TECHNICAL_CONCURRENCY)
+        endpoints = [e for e in self.TECHNICAL_ENDPOINTS if e not in self.unsupported_endpoints]
+        results = await asyncio.gather(
+            *[self._technical_value(e, wifi_box, semaphore) for e in endpoints]
         )
-        if not isinstance(message, dict):
-            return None
-        _LOGGER.debug("boiler technical data: %s", message)
-        return message
+        values = {e: v for e, (ok, v) in zip(endpoints, results) if ok}
+        failed = [e for e, (ok, _) in zip(endpoints, results) if not ok and e not in self.unsupported_endpoints]
+        if failed:
+            _LOGGER.warning("Technical data: no answer from %s", ", ".join(failed))
+        _LOGGER.debug("boiler technical data: %s", self._redact(str(values)))
+        return values
+
+    async def _technical_value(self, endpoint: str, wifi_box: str, semaphore) -> tuple[bool, object]:
+        """Return (True, value) on success, (False, None) on failure."""
+        url = self.BASE_URL + self.GET_BOILER_VALUE.format(
+            endpoint=endpoint,
+            user=self._user.get("id"),
+            wifi_box=wifi_box,
+            token=self.TOKEN,
+        )
+        for attempt in range(1, self.TECHNICAL_ATTEMPTS + 1):
+            retry = False
+            try:
+                async with semaphore, asyncio.timeout(self.TECHNICAL_TIMEOUT):
+                    res = await self._session.get(url)
+                    if res.status == 404:
+                        if endpoint not in self.unsupported_endpoints:
+                            self.unsupported_endpoints.add(endpoint)
+                            _LOGGER.debug("Technical endpoint not supported (404): %s", endpoint)
+                        return False, None
+                    if res.status >= 500:
+                        retry = True
+                        raise RuntimeError(f"HTTP {res.status}")
+                    if not res.ok:
+                        raise RuntimeError(f"HTTP {res.status}")
+                    data = await res.json()
+                if not isinstance(data, dict) or data.get("status") is not True:
+                    raise RuntimeError(
+                        "status false (error_code %s)"
+                        % (data.get("error_code") if isinstance(data, dict) else None)
+                    )
+                message = data.get("message")
+                if not isinstance(message, dict):
+                    raise RuntimeError("no message")
+                return True, message.get("value")
+            except (TimeoutError, aiohttp.ClientError) as ex:
+                retry = True
+                error = ex
+            except Exception as ex:  # pylint: disable=broad-except
+                error = ex
+            _LOGGER.debug(
+                "Technical endpoint %s, attempt %s/%s failed: %s: %s",
+                endpoint, attempt, self.TECHNICAL_ATTEMPTS,
+                type(error).__name__, self._redact(str(error)),
+            )
+            if not retry or attempt == self.TECHNICAL_ATTEMPTS:
+                break
+            await asyncio.sleep(self.TECHNICAL_RETRY_DELAY)
+        return False, None
 
     # ----------------------------------------------------------------- writes
 

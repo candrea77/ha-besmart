@@ -77,6 +77,9 @@
         "button": {
             "read_technical_data": {
                 "name": "Read technical data"
+            },
+            "refresh_now": {
+                "name": "Refresh now"
             }
         }
     }

@@ -49,6 +49,17 @@ def client():
     return c
 
 
+def test_redact_wifi_box_id_keeps_last_4(client):
+    msg = (
+        "404, message='Not Found', url='https://x/api/Android/Boilers/flame_status/"
+        f"user_id/4242/wifi_box_id/100200300456/token/{TOKEN}'"
+    )
+    out = client._redact(msg)
+    assert "100200300456" not in out
+    assert "wifi_box_id/***0456/token/***" in out
+    assert client._redact("wifi_box_id=987654&x=1") == "wifi_box_id=***7654&x=1"
+
+
 def test_redact_token_and_user_id_in_url(client):
     msg = (
         "500, message='Internal Server Error', url='https://api.besmart-home.com/"
@@ -59,7 +70,7 @@ def test_redact_token_and_user_id_in_url(client):
     assert TOKEN not in out
     assert "4242" not in out
     assert "user_id/***" in out
-    assert "wifi_box_id/77" in out
+    assert "wifi_box_id/***77" in out
 
 
 def test_redact_user_id_query_param(client):
