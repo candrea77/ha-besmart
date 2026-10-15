@@ -1,6 +1,7 @@
 """API client for the BeSMART cloud (Riello)."""
 import asyncio
 import logging
+import re
 from urllib.parse import quote  # URL-encode credentials in login()
 
 from homeassistant.core import HomeAssistant
@@ -8,6 +9,32 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
+
+# PATCH 0.7: path/query segments carrying the user id, e.g.
+# ".../user_id/12345/..." or "...?user_id=12345". The id itself is matched by
+# position, never by value, so short numeric ids can't mangle other text.
+_USER_ID_RE = re.compile(r"(user_id[/=])[^/&?\s'\"]+")
+
+# PATCH 0.7: values the cloud uses for "no data" (in addition to empty/None).
+_INVALID_VALUES = {"", "null", "none", "dncon"}
+
+
+def parse_value(value) -> float | None:
+    """Parse a numeric cloud value, returning None when it is not valid.
+
+    Empty, None, "null", "DNCON" and any string containing "disable" are
+    treated as missing. "0.0" is a valid 0, not missing.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    lowered = text.lower()
+    if lowered in _INVALID_VALUES or "disable" in lowered:
+        return None
+    try:
+        return float(text)
+    except (ValueError, TypeError):
+        return None
 
 
 # pylint: disable=too-many-instance-attributes
@@ -31,6 +58,10 @@ class BesmartClient:
     SET_THERMOSTAT_PROGRAM = "Android/Thermostats/program_196"
 
     GET_BOILER_DATA = "Android/Boilers/data/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
+    # PATCH 0.7: read-only technical endpoints (see CLAUDE.md: never write
+    # Boilers/TSP, never call Boilers/reset).
+    GET_BOILER_MODULATION = "Android/Boilers/modulation_ratio/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
+    GET_BOILER_TECHNICAL = "Android/Boilers/technical_datas/user_id/{user}/wifi_box_id/{wifi_box}/token/{token}"
     SET_BOILER_MODE = "Android/Boilers/work_mode"
     SET_BOILER_DHW_TEMP = "Android/Boilers/dhw_target_temp"
 
@@ -63,16 +94,20 @@ class BesmartClient:
         embed the full request URL in their message; the login URL contains
         username and password in the query string, so we must never log those
         messages verbatim.
+
+        PATCH 0.7: data URLs also embed the API token and the user id, so
+        those are stripped too.
         """
         for secret in (
             quote(self._password, safe=""),
             self._password,
             quote(self._username, safe=""),
             self._username,
+            self.TOKEN,
         ):
             if secret:
                 text = text.replace(secret, "***")
-        return text
+        return _USER_ID_RE.sub(r"\1***", text)
 
     # ------------------------------------------------------------------ login
 
@@ -254,6 +289,68 @@ class BesmartClient:
             _LOGGER.warning("Error in boiler(): %s", self._redact(str(ex)))
             self._user = None
             return None
+
+    async def _optional_get(self, name: str, path: str, wifi_box: str):
+        """PATCH 0.7: GET an optional endpoint and return its ``message``.
+
+        Returns None on any error or when the cloud answers with status false.
+        Unlike the core read methods it never resets ``self._user``: an
+        endpoint unsupported by a given boiler must not force a re-login (and
+        disturb the other calls) on every cycle.
+        """
+        try:
+            await self._ensure_login()
+
+            async with asyncio.timeout(self._timeout):
+                res = await self._session.get(
+                    self.BASE_URL + path.format(
+                        user=self._user.get("id"),
+                        wifi_box=wifi_box,
+                        token=self.TOKEN,
+                    ),
+                )
+                data = await res.json()
+
+            if not res.ok:
+                res.raise_for_status()
+
+            if not isinstance(data, dict) or data.get("status") is not True:
+                _LOGGER.debug(
+                    "%s: cloud returned no data (error_code %s)",
+                    name,
+                    data.get("error_code") if isinstance(data, dict) else None,
+                )
+                return None
+
+            return data.get("message")
+        except ConfigEntryAuthFailed:
+            raise
+        except Exception as ex:
+            _LOGGER.warning("Error in %s(): %s", name, self._redact(str(ex)))
+            return None
+
+    async def boiler_modulation(self, wifi_box: str):
+        """PATCH 0.7: return the raw modulation ratio value, or None.
+
+        Response: {"message": {"key": "modulation_ratio", "value": "..."}}.
+        """
+        message = await self._optional_get(
+            "boiler_modulation", self.GET_BOILER_MODULATION, wifi_box
+        )
+        if not isinstance(message, dict) or message.get("key") != "modulation_ratio":
+            return None
+        _LOGGER.debug("boiler modulation: %s", message.get("value"))
+        return message.get("value")
+
+    async def boiler_technical(self, wifi_box: str):
+        """PATCH 0.7: return the technical_datas dict (read on demand), or None."""
+        message = await self._optional_get(
+            "boiler_technical", self.GET_BOILER_TECHNICAL, wifi_box
+        )
+        if not isinstance(message, dict):
+            return None
+        _LOGGER.debug("boiler technical data: %s", message)
+        return message
 
     # ----------------------------------------------------------------- writes
 

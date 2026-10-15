@@ -69,6 +69,14 @@
                     "good": "Good",
                     "unknown": "Unknown"
                 }
+            },
+            "technical_data": {
+                "name": "Technical data"
+            }
+        },
+        "button": {
+            "read_technical_data": {
+                "name": "Read technical data"
             }
         }
     }

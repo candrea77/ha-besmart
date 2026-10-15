@@ -10,6 +10,8 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     # PATCH 0.6: new binary_sensor platform (boiler flame, circulator, DHW tap).
     Platform.BINARY_SENSOR,
+    # PATCH 0.7: "Read technical data" button (on-demand technical_datas).
+    Platform.BUTTON,
 ]
 
 # --- Config / options keys -------------------------------------------------

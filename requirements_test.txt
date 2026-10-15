@@ -1,0 +1,5 @@
+# Test dependencies for the "tests" CI job.
+# Python 3.13: newest Home Assistant release installable there (the tests only
+# exercise api.py helpers, which do not depend on 2026.7-only APIs).
+homeassistant==2026.2.3
+pytest==9.1.1

@@ -12,10 +12,19 @@ PATCH 0.5:
 - Boiler + thermostat requests for each wifi box are fetched concurrently with
   asyncio.gather to shorten the update cycle.
 
+PATCH 0.7:
+- Boilers/modulation_ratio is polled with the boiler data (boxes with a boiler
+  only). It is optional: a failure yields None for that cycle (no fallback to
+  the previous value, since modulation changes quickly) and never fails the
+  update on its own.
+- Boilers/technical_datas is NOT polled: it is read on demand (button entity)
+  via async_read_technical() and kept in ``self.technical``.
+
 data layout:
     {
         <wifi_box_id>: {
             "boiler": { ... } | None,
+            "modulation": "<raw value>" | None,   # PATCH 0.7
             "thermostats": { <room_id>: { ... }, ... },
         },
         ...
@@ -30,8 +39,9 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import BesmartClient
 from .const import (
@@ -71,6 +81,10 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         self.client = client
         # PATCH 0.5: topology owned by the coordinator (see module docstring).
         self.interface_devices = interface_devices
+        # PATCH 0.7: on-demand technical data per wifi box:
+        # {wifi_box: {"values": {...}, "last_read": datetime}}.
+        self.technical: dict[str, dict] = {}
+        self._technical_locks: dict[str, asyncio.Lock] = {}
         super().__init__(
             hass,
             _LOGGER,
@@ -101,10 +115,14 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
                 t.get("id") for t in device.thermostats if t.get("id") is not None
             ]
 
+            # PATCH 0.7: modulation only for boxes that have a boiler.
+            has_boiler = device.boiler is not None
+
             # PATCH 0.5: fetch boiler + all thermostats of this box concurrently.
             responses = await asyncio.gather(
                 self.client.boiler(wifi_box),
                 *[self.client.thermostat(wifi_box, rid) for rid in room_ids],
+                *([self.client.boiler_modulation(wifi_box)] if has_boiler else []),
                 return_exceptions=True,
             )
 
@@ -119,16 +137,29 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
                 boiler = prev_box.get("boiler")
 
             thermostats: dict[str, dict] = {}
-            for room_id, data in zip(room_ids, responses[1:]):
+            for room_id, data in zip(room_ids, responses[1 : 1 + len(room_ids)]):
                 if isinstance(data, Exception) or data is None:
                     data = prev_box.get("thermostats", {}).get(room_id)
                 if data is not None:
                     thermostats[room_id] = data
 
-            result[wifi_box] = {"boiler": boiler, "thermostats": thermostats}
+            # PATCH 0.7: optional; failure -> None (unknown), no stale value.
+            modulation = None
+            if has_boiler:
+                modulation = responses[-1]
+                if isinstance(modulation, Exception):
+                    _LOGGER.debug("modulation read failed: %s", type(modulation).__name__)
+                    modulation = None
+
+            result[wifi_box] = {
+                "boiler": boiler,
+                "modulation": modulation,
+                "thermostats": thermostats,
+            }
 
         # If nothing at all came back (and we have no previous data to fall back
         # on), mark the update as failed so entities go unavailable.
+        # PATCH 0.7: "modulation" deliberately does not count here.
         has_any = any(
             box.get("boiler") is not None or box.get("thermostats")
             for box in result.values()
@@ -147,3 +178,33 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
     def boiler_data(self, wifi_box: str) -> dict | None:
         """Return the latest boiler data dict for a wifi box, or None."""
         return (self.data or {}).get(wifi_box, {}).get("boiler")
+
+    def modulation(self, wifi_box: str):
+        """PATCH 0.7: return the latest raw modulation value, or None."""
+        return (self.data or {}).get(wifi_box, {}).get("modulation")
+
+    def technical_data(self, wifi_box: str) -> dict | None:
+        """PATCH 0.7: return the last on-demand technical reading, or None."""
+        return self.technical.get(wifi_box)
+
+    async def async_read_technical(self, wifi_box: str) -> None:
+        """PATCH 0.7: read Boilers/technical_datas once (button press).
+
+        On failure raises HomeAssistantError (shown in the UI) and keeps the
+        previous reading untouched. A per-box lock collapses repeated presses.
+        """
+        lock = self._technical_locks.setdefault(wifi_box, asyncio.Lock())
+        if lock.locked():
+            _LOGGER.debug("technical data read already in progress, ignoring press")
+            return
+        async with lock:
+            values = await self.client.boiler_technical(wifi_box)
+            if values is None:
+                raise HomeAssistantError(
+                    "Could not read technical data from the BeSMART cloud"
+                )
+            self.technical[wifi_box] = {
+                "values": values,
+                "last_read": dt_util.utcnow(),
+            }
+        self.async_update_listeners()

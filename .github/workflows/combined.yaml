@@ -3,8 +3,6 @@ name: "Validation"
 on:
   push:
   pull_request:
-  schedule:
-    - cron: "0 0 * * *"
 
 jobs:
   hassfest:
@@ -28,3 +26,23 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+
+  tests:
+    name: "Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      - name: Install test dependencies
+        run: pip install -r requirements_test.txt
+
+      - name: Run pytest
+        run: python -m pytest -v tests
