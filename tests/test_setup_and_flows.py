@@ -400,7 +400,7 @@ async def test_device_has_no_wifi_box_model_id(hass, cloud):
     entry = v2_entry()
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    (device,) = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert device.model == "BeSMART WiFi box"
     assert device.model_id is None
 
@@ -415,7 +415,7 @@ async def test_device_model_id_from_old_version_is_cleared(hass, cloud):
         model_id=WIFI_BOX,
     )
     assert await hass.config_entries.async_setup(entry.entry_id)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    (device,) = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert device.model_id is None
 
 
