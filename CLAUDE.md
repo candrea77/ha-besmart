@@ -70,5 +70,11 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
   published as a GitHub pre-release.
 - Release branches are named `release-vX.Y`.
 - CI (`.github/workflows/combined.yaml`) runs hassfest, HACS validation and
-  `pytest tests` (deps in `requirements_test.txt`). Tests never hit the real
-  cloud: use the fakes in `tests/conftest.py`.
+  `pytest tests` on Python 3.14 against the minimum supported Home Assistant
+  (2026.7, pinned in the workflow matrix) and the latest one
+  (`requirements_test.txt`, bumped by Dependabot). Tests use
+  pytest-homeassistant-custom-component (real `hass` fixture) and never hit
+  the real cloud: use the fakes in `tests/conftest.py`. Actions are pinned to
+  commit SHAs; the workflow token is read-only.
+- No `country` key in `hacs.json`: the integration must be visible in every
+  country.

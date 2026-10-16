@@ -1,32 +1,136 @@
+# BeSMART for Home Assistant
 
-# HA Riello's Besmart thermostats 
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=candrea77&repository=ha-besmart&category=integration)
+[![Validation](https://github.com/candrea77/ha-besmart/actions/workflows/combined.yaml/badge.svg)](https://github.com/candrea77/ha-besmart/actions/workflows/combined.yaml)
 
-Support for Riello's Besmart thermostats.
-Be aware the thermostat may require more then 3 minute to refresh its states.
+Home Assistant integration for **Riello BeSMART** WiFi thermostats and the
+boilers connected to them (Riello, Beretta and other brands of the group),
+through the BeSMART cloud — the same service used by the official app.
 
-The thermostats support the season switch however this control will be managed with a 
-different control.
+<!-- SCREENSHOT 1: device page with thermostat, water heater and sensors -->
+<!-- ![BeSMART device in Home Assistant](docs/images/device.png) -->
 
-Tested with home-assistant >= 2026.7
+<!-- SCREENSHOT 2: thermostat card / technical data attributes -->
+<!-- ![Thermostat and technical data](docs/images/technical-data.png) -->
 
-Using HACS, add the custom repository, selecting **"Integration"** as the value for **"Type"**
+## Features
 
-Once the repository has been successfully added, go to **Settings** → **Devices & services** → **Add Integration**, select **BeSmart**, and complete the required settings.
+- Control of every BeSMART thermostat: target temperature, presets
+  (Auto, Manual, Eco, Party, Off/anti-freeze), heating/cooling season.
+- Domestic hot water (DHW): target temperature and boiler work mode.
+- Boiler monitoring: pressure, flow (water) temperature, outdoor probe,
+  **burner modulation (%)**, flame / circulator / DHW-tap states.
+- On-demand **technical data** (flow/return/flue temperatures, DHW values,
+  operating hours, ...) read only when you press a button.
+- Config flow (UI setup), reauthentication, reconfigure, options,
+  diagnostics, Repairs warnings, English and Italian translations.
+- Security-minded: TLS verification on by default, secrets never logged,
+  write commands validated before reaching the cloud (see
+  [Privacy and security](#privacy-and-security)).
 
-## Buttons
+## Requirements
 
-- **Refresh now** — immediately refreshes all polled data (boiler, thermostats,
-  boiler modulation) instead of waiting for the next update interval. Presses
-  less than 10 seconds apart, or while a refresh is running, are ignored.
-  **Note:** the BeSMART cloud receives fresh data from the WiFi module only
-  about every 3 minutes, so a forced refresh may still return values that have
-  not been updated yet.
-- **Read technical data** (diagnostic, boilers only) — reads the boiler
-  technical values once (pressure, flow/return/flue temperatures, DHW values,
-  flame, operating hours, …) and stores them as attributes of the
-  **Technical data** sensor. These values are never polled. Endpoints the cloud
-  does not support for your boiler are listed in the `unsupported_endpoints`
-  attribute.
+- Home Assistant **2026.7.0** or newer.
+- A BeSMART account working in the official app (WiFi box online).
+
+## Installation
+
+### HACS (recommended)
+
+1. Click the **Open in HACS** badge above, or in HACS add this repository as
+   a *custom repository* of type **Integration**:
+   `https://github.com/candrea77/ha-besmart`.
+2. Download **BeSMART** and restart Home Assistant.
+3. Go to **Settings → Devices & services → Add integration → BeSMART** and
+   enter your BeSMART username and password.
+
+> [!NOTE]
+> This integration uses the domain `besmart_thermostat`, like
+> [coder89/ha-besmart](https://github.com/coder89/ha-besmart): only one of the
+> two can be installed. Remove the other repository from HACS (and restart)
+> before installing this one.
+
+### Manual
+
+Copy `custom_components/besmart_thermostat` into the `custom_components`
+folder of your Home Assistant configuration and restart.
+
+## Configuration
+
+| Setting | Where | Notes |
+|---|---|---|
+| Name, username, password | Setup | Credentials are verified before saving. Change them later with **Reconfigure**. |
+| Work modes | Setup / Options | Heating and/or cooling. |
+| Verify TLS certificate | Setup / Options | On by default. Turn off only if login fails because of a broken certificate chain (a Repairs warning is shown). |
+| Update interval | Setup / Options | 180–600 s (default 300). |
+
+## Entities
+
+One **BeSMART WiFi box** device is created per account, with:
+
+| Entity | Type | Notes |
+|---|---|---|
+| *&lt;Room&gt;* Thermostat | climate | One per thermostat. |
+| *&lt;Room&gt;* Temperature | sensor | Temperature measured by the thermostat. |
+| *&lt;Room&gt;* Thermostat Battery Status | sensor (diagnostic) | low / good / unknown. |
+| Water Heater | water_heater | DHW target 30–60 °C (whole degrees), work mode. |
+| Boiler System Pressure | sensor | bar. |
+| Boiler Water Temperature | sensor | Central heating flow temperature. |
+| Outdoor Temperature | sensor | If an outdoor probe is installed. |
+| **Boiler Modulation** | sensor | Burner modulation in %, polled with the other data. |
+| Boiler Flame / Boiler Circulator / DHW Tap | binary_sensor | Boiler states reported by the cloud (see [Known limitations](#known-limitations)). |
+| **Refresh now** (*Aggiorna ora*) | button | Immediate refresh of all polled data. Presses less than 10 s apart, or during a refresh, are ignored. |
+| **Read technical data** (*Leggi dati tecnici*) | button (diagnostic) | Reads the boiler technical values once (never polled). 30 s cooldown. |
+| Technical data (*Dati tecnici*) | sensor (diagnostic) | State = time of the last reading; attributes: `modulation_pct`, `pressure_bar`, `flow_temperature`, `return_temperature`, `flue_temperature`, `dhw_temperature`, `dhw_set_point`, `heating_set_point`, `dhw_flow_rate`, `flame`, `outdoor_temperature`, `heat_exchanger_hours`, `heating_hours`, `dhw_hours`, `temperature_unit`, `unsupported_endpoints`. Restored after a restart. |
+
+Boiler entities are created only when the WiFi box reports a boiler.
+
+## Tested devices
+
+- **Beretta Mynute X 30 C** with BeSMART WiFi thermostat.
+
+Other BeSMART-compatible boilers should work; please report your model in an
+issue (with a diagnostics file) so it can be added here.
+
+## Known limitations
+
+- **Cloud refresh:** the BeSMART cloud receives fresh data from the WiFi
+  module only about **every 3 minutes**. Polling faster does not help, and
+  **Refresh now** may return values that have not changed yet.
+- **Flame state is not reliable:** the cloud's `flame_status` (Boiler Flame
+  binary sensor) can stay *off* while the burner is running, e.g. during a
+  DHW draw. Use **Boiler Modulation** (> 0 % means the burner is on) or the
+  `flame` attribute of **Technical data** instead.
+- Some technical values are not available on every boiler: they are listed
+  in the `unsupported_endpoints` attribute.
+- Cloud only: no local control. If the BeSMART cloud is down, the
+  integration cannot work.
+- The login endpoint only accepts credentials in the URL (see below).
+
+## Differences from the original project
+
+This repository is a fork of
+[coder89/ha-besmart](https://github.com/coder89/ha-besmart), itself derived
+from [muchasuerte/ha-besmart](https://github.com/muchasuerte/ha-besmart).
+Main changes:
+
+- **Architecture:** single `DataUpdateCoordinator` (one round of cloud calls
+  per cycle instead of one per entity), async HTTP with timeouts, no blocking
+  calls in the event loop.
+- **Setup and account:** config flow with login validation, reauthentication,
+  reconfigure, options (update interval, TLS verification), one entry per
+  account, diagnostics with redaction, Repairs warnings.
+- **New entities:** boiler modulation, pressure, water and outdoor
+  temperature, per-thermostat temperature, flame/circulator/DHW-tap binary
+  sensors, Refresh now and Read technical data buttons, Technical data sensor.
+- **Security:** TLS verification on by default, credentials and identifiers
+  never written to logs or UI messages, validation of every command sent to
+  the cloud, CI with pinned actions and automated tests.
+- **Fixes:** season switching endpoint, timezone of the thermostat program,
+  thermostat temperature rounding, many robustness fixes against malformed
+  cloud data.
+
+The full history is in the [release notes](https://github.com/candrea77/ha-besmart/releases).
 
 ## Privacy and security
 
@@ -72,10 +176,36 @@ the UI never contain the original network error.
    for your user id, WiFi box id and e-mail and replace them with `***`.
 3. Never post screenshots of the BeSMART app's account or device pages.
 
-## Contribute
+## Troubleshooting
 
-Contributions are always welcome!
+- Enable debug logging from **Settings → Devices & services → BeSMART → ⋮ →
+  Enable debug logging**, or in `configuration.yaml`:
+
+  ```yaml
+  logger:
+    logs:
+      custom_components.besmart_thermostat: debug
+  ```
+
+- Open an [issue](https://github.com/candrea77/ha-besmart/issues) with the
+  diagnostics file; read [Sharing logs and diagnostics safely](#privacy-and-security)
+  first.
+
+## Credits
+
+- [muchasuerte/ha-besmart](https://github.com/muchasuerte/ha-besmart) by
+  Andrea Nicotra — the original integration.
+- [coder89/ha-besmart](https://github.com/coder89/ha-besmart) — config flow,
+  water heater and battery sensor, base of this fork.
+- Everyone who reported issues and tested on their boilers.
+
+This project is not affiliated with or endorsed by Riello S.p.A.
+
+## Contributing
+
+Contributions are welcome. Tests run with `pytest` (see
+`requirements_test.txt`); development rules are in [CLAUDE.md](CLAUDE.md).
 
 ## License
 
-[![CC0](https://licensebuttons.net/p/zero/1.0/88x31.png)](https://creativecommons.org/publicdomain/zero/1.0/)
+[MIT](LICENSE)
