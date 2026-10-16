@@ -1,20 +1,22 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b6 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+> **0.7.0b7 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
 
-### Changes since 0.7.0b5
-- Thermostat settings are checked against the **limits of the official
-  app**, both when reading them from the cloud and before a season switch:
-  max heating set point 15–80 °C, min heating set point 10–75 °C (min ≤ max),
-  climatic curve only 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5 or 3.0,
-  sensor influence 0–20. Values outside these limits are treated like the
-  partial zeros: the last valid value is kept and no settings are written.
+### Changes since 0.7.0b6
 - **Technical data:** the attribute `heat_exchanger_hours` is renamed
   `high_condensation_hours`: the cloud counter `heat_exchanger_hours_amassed`
   is the app's "operating hours in high-condensation mode", not a heat
   exchanger cleaning counter. Update templates/automations that read the old
   attribute. Hour attributes now have translated names (EN/IT).
 - No configuration changes: updating from 0.7.0b3 or later needs no migration.
+
+### Changes in 0.7.0b6
+- Thermostat settings are checked against the **limits of the official
+  app**, both when reading them from the cloud and before a season switch:
+  max heating set point 15–80 °C, min heating set point 10–75 °C (min ≤ max),
+  climatic curve only 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5 or 3.0,
+  sensor influence 0–20. Values outside these limits are treated like the
+  partial zeros: the last valid value is kept and no settings are written.
 
 ### Changes in 0.7.0b5
 - **Partial thermostat data:** the cloud sometimes reports a thermostat's
