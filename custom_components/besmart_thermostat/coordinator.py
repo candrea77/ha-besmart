@@ -60,6 +60,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # PATCH 0.7: minimum seconds between two accepted "Refresh now" presses.
 MANUAL_REFRESH_COOLDOWN = 10
+# PATCH 0.7: minimum seconds between two accepted "Read technical data"
+# presses (each one sends up to 14 requests).
+TECHNICAL_READ_COOLDOWN = 30
 
 type BesmartData = dict[str, dict]
 
@@ -93,6 +96,7 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         #             "unsupported": [...], "last_read": datetime}}.
         self.technical: dict[str, dict] = {}
         self._technical_locks: dict[str, asyncio.Lock] = {}
+        self._last_technical_read: dict[str, float] = {}
         # PATCH 0.7: "Refresh now" button state.
         self._manual_refresh_lock = asyncio.Lock()
         self._last_manual_refresh: float | None = None
@@ -113,8 +117,9 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         except ConfigEntryAuthFailed:
             raise
         except Exception as ex:  # pylint: disable=broad-except
-            # PATCH 0.7: redacted, the message may contain the login URL.
-            raise UpdateFailed(f"Login failed: {self.client._redact(str(ex))}") from ex
+            # PATCH 0.7: BesmartError messages are already redacted; never
+            # chain the original exception (HA may show its text).
+            raise UpdateFailed(f"Login failed: {self.client._redact(str(ex))}") from None
 
         previous: BesmartData = self.data or {}
         result: BesmartData = {}
@@ -205,21 +210,26 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         Endpoints that fail are stored as missing (None attributes). Raises
         HomeAssistantError (shown in the UI) only when none answered, keeping
         the previous reading untouched. A per-box lock collapses repeated
-        presses. The modulation is taken from the polled data, not re-read.
+        presses and presses within TECHNICAL_READ_COOLDOWN seconds are
+        ignored. The modulation is taken from the polled data, not re-read.
         """
         lock = self._technical_locks.setdefault(wifi_box, asyncio.Lock())
-        if lock.locked():
-            _LOGGER.debug("technical data read already in progress, ignoring press")
+        now = monotonic()
+        last = self._last_technical_read.get(wifi_box)
+        if lock.locked() or (last is not None and now - last < TECHNICAL_READ_COOLDOWN):
+            _LOGGER.debug("technical data read ignored (in progress or pressed too soon)")
             return
+        self._last_technical_read[wifi_box] = now
         async with lock:
             try:
                 values = await self.client.boiler_technical(wifi_box)
             except ConfigEntryAuthFailed:
                 raise
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except
+                # PATCH 0.7: fixed message, original exception not chained.
                 raise HomeAssistantError(
-                    f"Could not read technical data: {self.client._redact(str(ex))}"
-                ) from ex
+                    "Could not read technical data from the BeSMART cloud"
+                ) from None
             if not values:
                 raise HomeAssistantError(
                     "Could not read technical data from the BeSMART cloud"

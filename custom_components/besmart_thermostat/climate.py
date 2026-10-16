@@ -21,11 +21,12 @@ from homeassistant.const import (
     CONF_MODE,
     UnitOfTemperature,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .api import BesmartValidationError
 from .coordinator import BesmartDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -396,6 +397,14 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             "economy_temp": self._saveT
         }
 
+    @staticmethod
+    async def _call(command):
+        """PATCH 0.7: run a write command; invalid input -> ServiceValidationError."""
+        try:
+            return await command
+        except BesmartValidationError as ex:
+            raise ServiceValidationError(str(ex)) from None
+
     async def async_turn_on(self):
         await self.async_set_preset_mode(self.PRESET_BESMART_TO_HA.get(self.AUTO))
 
@@ -412,7 +421,9 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             if season is not None and self._season != season:
                 # PATCH 0.5: surface command failures in the UI instead of
                 # silently ignoring them.
-                ok = await self._cl.setThermostatSeason(self._wifi_box, self._room_id, season)
+                ok = await self._call(
+                    self._cl.setThermostatSeason(self._wifi_box, self._room_id, season)
+                )
                 if not ok:
                     raise HomeAssistantError(
                         f"Failed to set season for {self._room_name} on BeSMART cloud"
@@ -426,7 +437,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
     async def async_set_preset_mode(self, preset_mode):
         """Set HVAC mode (comfort, home, sleep, Party, Off)."""
         mode = self.PRESET_HA_TO_BESMART.get(preset_mode, self.AUTO)
-        ok = await self._cl.setThermostatMode(self._wifi_box, self._room_id, mode)
+        ok = await self._call(self._cl.setThermostatMode(self._wifi_box, self._room_id, mode))
         if not ok:
             raise HomeAssistantError(
                 f"Failed to set preset {preset_mode} for {self._room_name} on BeSMART cloud"
@@ -446,8 +457,10 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             "setting new temp %s %s %s", self._tempSetMark, self._room_name, temperature
         )
         # The mark itself selects which set-point is written.
-        ok = await self._cl.setThermostatTemp(
-            self._wifi_box, self._room_id, temperature, self._tempSetMark
+        ok = await self._call(
+            self._cl.setThermostatTemp(
+                self._wifi_box, self._room_id, temperature, self._tempSetMark
+            )
         )
         if not ok:
             raise HomeAssistantError(

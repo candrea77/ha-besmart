@@ -1,5 +1,6 @@
-# Test dependencies for the "tests" CI job.
-# Python 3.13: newest Home Assistant release installable there (the tests only
-# exercise api.py helpers, which do not depend on 2026.7-only APIs).
+# Test dependencies for the "tests" CI job (Python 3.13).
+# pytest-homeassistant-custom-component pins a matching Home Assistant
+# (2026.2.3, the newest installable on Python 3.13) and pytest; it provides
+# the real `hass` fixture used by the setup/flow tests.
 homeassistant==2026.2.3
-pytest==9.1.1
+pytest-homeassistant-custom-component==0.13.316

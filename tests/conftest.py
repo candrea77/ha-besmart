@@ -1,6 +1,10 @@
-"""Shared fixtures: make ``custom_components`` importable and fake the cloud."""
+"""Shared fixtures: make ``custom_components`` importable and fake the cloud.
+
+Tests never contact the real BeSMART cloud.
+"""
 
 import asyncio
+import json
 import sys
 import types
 from pathlib import Path
@@ -16,41 +20,70 @@ from custom_components.besmart_thermostat.coordinator import (  # noqa: E402
     BesmartDataUpdateCoordinator,
 )
 
+USERNAME = "mario.rossi@example.com"
+PASSWORD = "p&ss w0rd"
 USER_ID = "4242"
 WIFI_BOX = "100200300456"
 
 
-class FakeResponse:
-    """Minimal aiohttp-like response."""
+class _Content:
+    def __init__(self, raw: bytes):
+        self._raw = raw
 
-    def __init__(self, payload, status=200):
-        self._payload = payload
+    reads = 0
+
+    async def read(self, n=-1):
+        self.reads += 1
+        return self._raw if n < 0 else self._raw[:n]
+
+
+class FakeResponse:
+    """Minimal aiohttp-like response.
+
+    ``payload`` may be a dict/list (sent as JSON), a str/bytes (sent raw,
+    e.g. an HTML error page) or None (empty body).
+    """
+
+    def __init__(self, payload=None, status=200, content_length=None):
+        if isinstance(payload, (dict, list)):
+            raw = json.dumps(payload).encode()
+        elif isinstance(payload, str):
+            raw = payload.encode()
+        else:
+            raw = payload or b""
+        self.content = _Content(raw)
+        self.content_length = content_length
         self.status = status
         self.ok = status < 400
+        self.released = False
 
-    async def json(self):
-        if isinstance(self._payload, Exception):
-            raise self._payload
-        return self._payload
-
-    def raise_for_status(self):
-        raise RuntimeError(f"{self.status}, url='{self.url}'")
+    def release(self):
+        self.released = True
 
 
 class FakeSession:
-    """Routes GETs by URL substring.
+    """Routes requests by URL substring.
 
-    A route value is a payload dict, a FakeResponse, an Exception instance, or
-    a list of those consumed one per call (the last one repeats).
+    A route value is a payload (dict/str), a FakeResponse, an Exception
+    instance (raised, with the URL in its message like aiohttp does), or a
+    list of those consumed one per call (the last one repeats).
     """
 
     def __init__(self, routes):
         self.routes = routes
         self.calls = []
+        self.puts = []
         self.in_flight = 0
         self.max_in_flight = 0
 
     async def get(self, url):
+        return await self._handle("GET", url)
+
+    async def put(self, url, data=None):
+        self.puts.append((url, data))
+        return await self._handle("PUT", url)
+
+    async def _handle(self, method, url):
         self.calls.append(url)
         self.in_flight += 1
         self.max_in_flight = max(self.max_in_flight, self.in_flight)
@@ -61,11 +94,15 @@ class FakeSession:
                     if isinstance(value, list):
                         value = value.pop(0) if len(value) > 1 else value[0]
                     if isinstance(value, Exception):
-                        raise type(value)(f"{value} for url {url}")
-                    response = value if isinstance(value, FakeResponse) else FakeResponse(value)
-                    response.url = url
-                    return response
-            raise AssertionError(f"unexpected url {url}")
+                        try:
+                            error = type(value)(f"{value}, url='{url}'")
+                        except TypeError:  # exceptions with a custom signature
+                            error = value
+                        raise error
+                    if isinstance(value, FakeResponse):
+                        return value
+                    return FakeResponse(value)
+            raise AssertionError(f"unexpected {method} {url}")
         finally:
             self.in_flight -= 1
 
@@ -78,14 +115,27 @@ def ok(value, key="x"):
     return {"error_code": 0, "status": True, "message": {"key": key, "value": value}}
 
 
+LOGIN_OK = {
+    "error_code": 0,
+    "status": True,
+    "message": {
+        "user": {"id": USER_ID, "email": USERNAME},
+        "wifi_box": [{"id": WIFI_BOX}],
+    },
+}
+
+
 @pytest.fixture
 def make_client(monkeypatch):
     monkeypatch.setattr(BesmartClient, "TECHNICAL_RETRY_DELAY", 0)
 
-    def _make(routes):
+    def _make(routes, logged_in=True):
         with patch.object(api, "async_get_clientsession", return_value=FakeSession(routes)):
-            client = BesmartClient(None, "mario.rossi@example.com", "p&ss w0rd", True)
-        client._user = {"id": USER_ID}
+            client = BesmartClient(None, USERNAME, PASSWORD, True)
+        if logged_in:
+            client._user = {"id": USER_ID}
+            client._known_user_ids.add(USER_ID)
+            client._known_wifi_boxes.add(WIFI_BOX)
         return client
 
     return _make
@@ -114,6 +164,7 @@ def make_coordinator(make_client):
         coordinator.data = data
         coordinator.technical = {}
         coordinator._technical_locks = {}
+        coordinator._last_technical_read = {}
         coordinator._manual_refresh_lock = asyncio.Lock()
         coordinator._last_manual_refresh = None
         coordinator.last_update_success = True

@@ -45,14 +45,12 @@ def test_flame_parsing(raw, expected):
     assert is_on(BoilerFlameBinarySensor, {"flame_status": raw}) is expected
 
 
-def test_boiler_state_fields_logged_redacted(make_client, caplog):
-    import asyncio
-
+async def test_boiler_state_fields_logged_redacted(make_client, caplog):
     from custom_components.besmart_thermostat.api import BesmartClient
 
     client = make_client({"Boilers/data": {"status": True, "message": BOILER_DATA_FLAME_ON}})
     with caplog.at_level(logging.DEBUG):
-        asyncio.run(client.boiler(WIFI_BOX))
+        await client.boiler(WIFI_BOX)
     line = next(r.getMessage() for r in caplog.records if "boiler state fields" in r.getMessage())
     assert "'flame_status': '1'" in line and "'dhw_active': '1'" in line
     assert "'heating_status': '0'" in line

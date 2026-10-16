@@ -1,5 +1,43 @@
 ## Changes as compared to your installed version:
 
+> **0.7.0 (in preparation)** — security release.
+
+### ⚠️ Breaking / irreversible
+- **Config entry migration (v1 → v2), irreversible.** On first start the
+  credentials are moved from the integration options to the protected entry
+  data and TLS verification is turned on for entries created before 0.7 (an
+  explicit "off" you chose is kept, with a warning in Settings → Repairs).
+  **Make a Home Assistant backup before updating. Downgrading to 0.6 or
+  earlier is not supported** after the migration.
+- Username and password are no longer in the integration **Options**: change
+  them with **Reconfigure** from the integration menu.
+- The BeSMART device no longer shows the WiFi box id as "Model ID"
+  (model is now "BeSMART WiFi box").
+
+### Security fixes
+- Credentials could appear in clear in Settings ("Retrying setup: ...") and in
+  logs when the cloud answered with an error page: the original network
+  error is no longer exposed anywhere (setup, config flow, reauth,
+  reconfigure).
+- TLS certificate verification on by default for old entries; Repairs warning
+  when it is off or when the certificate cannot be verified.
+- User id and WiFi box id are treated as secrets: masked in logs, removed
+  from diagnostics (boxes appear as `box_1`...), no longer shown in device
+  info or error messages.
+- Debug logs of cloud payloads are redacted.
+- Config flow validates the login, prevents adding the same account twice;
+  reauth/reconfigure cannot switch to another account.
+- Write commands are validated before being sent (thermostat temperature
+  3–35 °C rounded to 0.1, DHW temperature 30–60 °C whole degrees, modes,
+  season settings) and a command rejected by the cloud now shows an error.
+- Response size limit, malformed responses ignored, 30 s cooldown on
+  "Read technical data", unused write endpoints removed.
+- CI: GitHub Actions pinned to commit SHAs, read-only token, Dependabot.
+- Known residual risk: the BeSMART login endpoint only accepts the
+  credentials in the URL query string (POST is not supported).
+
+### Previous pre-release notes (0.7.0b2)
+
 > **0.7.0b2 is a pre-release.** Enable "Show beta versions" in HACS to install it.
 
 ### Breaking Changes

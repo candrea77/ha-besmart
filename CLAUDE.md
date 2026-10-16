@@ -21,7 +21,13 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    `BesmartClient._redact()` (which also reduces the wifi box id to its last
    4 characters). Never log full URLs or the login payload.
    `diagnostics.py` must keep redacting `token`, `user_id`, `email` and the
-   credentials.
+   credentials, and pseudonymize wifi box ids (`box_1`...), also as dict keys.
+   The cloud has no per-user token: **user_id + wifi_box_id are credentials**.
+   Never show them in UI messages or device info (no `model_id`).
+   Never chain cloud/aiohttp exceptions into Home Assistant exceptions
+   (`ConfigEntryNotReady`, `UpdateFailed`, `HomeAssistantError`): HA shows
+   `str(__cause__)` in the UI. Raise `BesmartError` / fixed messages
+   `from None`; config/reauth/reconfigure flows return only error keys.
 4. **Optional endpoints must fail soft.** Extra reads (e.g.
    `Boilers/modulation_ratio`, the single-value technical endpoints in
    `BesmartClient.TECHNICAL_ENDPOINTS`) must never make the other entities
@@ -34,6 +40,15 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    module data only every ~3 minutes.
 
 ## Architecture
+
+- Config entry version 2: credentials in `entry.data`, everything else in
+  `entry.options` (migration v1 -> v2 is irreversible). `unique_id` is a hash
+  of the cloud user id, set at the first successful setup.
+- Write commands validate their input in `api.py` (`BesmartValidationError`,
+  turned into `ServiceValidationError` by the entities) before sending.
+  A write fails only on HTTP error, `status: false` or `error_code` != 0.
+- All HTTP goes through `BesmartClient._request()` (timeout, 512 KB body cap,
+  sanitized exceptions).
 
 - `api.py` — `BesmartClient`, one method per endpoint. Read methods return
   `None` on error (logging a redacted warning); `ConfigEntryAuthFailed` always

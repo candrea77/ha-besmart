@@ -1,0 +1,16 @@
+# PATCH 0.7 (security): keep the SHA-pinned actions and the test
+# dependencies up to date (Dependabot rewrites the SHA and the comment).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "test"

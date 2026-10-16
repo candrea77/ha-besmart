@@ -1,5 +1,7 @@
 """Constants for the BeSMART Thermostat."""
 
+import hashlib
+
 from homeassistant.const import Platform
 
 DOMAIN = "besmart_thermostat"
@@ -33,3 +35,16 @@ SCAN_INTERVAL_STEP = 60
 
 # PATCH 0.5: removed unused UPDATE_INTERVAL timedelta (dead code; the
 # coordinator computes its interval from the option via _resolve_interval).
+
+# PATCH 0.7 (security): Repairs issue ids (suffixed with the entry id).
+ISSUE_VERIFY_SSL_DISABLED = "verify_ssl_disabled"
+ISSUE_TLS_CERTIFICATE = "tls_certificate_error"
+
+
+def account_unique_id(user_id: str) -> str:
+    """PATCH 0.7: config entry unique_id derived from the cloud user id.
+
+    A one-way hash, so the user id (which acts as a credential together with
+    the wifi box id) is never stored in clear in the entry registry.
+    """
+    return hashlib.sha256(f"besmart:{user_id}".encode()).hexdigest()[:32]

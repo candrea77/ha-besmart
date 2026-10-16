@@ -28,32 +28,49 @@
                 "data": {
                     "username": "Username",
                     "password": "Password"
+                },
+                "data_description": {
+                    "username": "Provide username for the BeSMART account.",
+                    "password": "Provide password for the BeSMART account."
+                }
+            },
+            "reconfigure": {
+                "title": "Update BeSMART credentials",
+                "description": "Enter the new credentials for {name}. They must belong to the same BeSMART account.",
+                "data": {
+                    "username": "Username",
+                    "password": "Password"
+                },
+                "data_description": {
+                    "username": "Provide username for the BeSMART account.",
+                    "password": "Provide password for the BeSMART account."
                 }
             }
         },
         "error": {
             "invalid_auth": "Invalid credentials.",
-            "cannot_connect": "Could not connect to the BeSMART cloud."
+            "cannot_connect": "Could not connect to the BeSMART cloud.",
+            "tls_error": "The TLS certificate of the BeSMART cloud could not be verified. You can disable 'Verify TLS certificate' only if you trust your network."
         },
         "abort": {
-            "reauth_successful": "Reauthentication was successful."
+            "already_configured": "This BeSMART account is already configured.",
+            "reauth_successful": "Reauthentication was successful.",
+            "reconfigure_successful": "The credentials were updated.",
+            "wrong_account": "These credentials belong to a different BeSMART account."
         }
     },
     "options": {
         "step": {
             "init": {
+                "description": "To change username or password use Reconfigure from the integration menu.",
                 "data": {
                     "name": "Name",
-                    "username": "Username",
-                    "password": "Password",
                     "mode": "Work mode",
                     "verify_ssl": "Verify TLS certificate",
                     "scan_interval": "Update interval (s)"
                 },
                 "data_description": {
                     "name": "Name of the integration.",
-                    "username": "Provide username for the BeSMART account.",
-                    "password": "Provide password for the BeSMART account.",
                     "mode": "Select available work modes of BeSMART controlled device",
                     "verify_ssl": "Verify the BeSMART cloud TLS certificate. Disable only if login fails due to a broken/incomplete certificate chain.",
                     "scan_interval": "How often to poll the BeSMART cloud (the cloud itself refreshes roughly every 3 minutes)."
@@ -61,7 +78,25 @@
             }
         }
     },
+    "issues": {
+        "verify_ssl_disabled": {
+            "title": "TLS verification disabled for {name}",
+            "description": "TLS certificate verification for the BeSMART cloud is disabled for {name}. Credentials and identifiers are sent without verifying the server. Enable 'Verify TLS certificate' in the integration options; keep it disabled only if login fails because of a broken certificate chain."
+        },
+        "tls_certificate_error": {
+            "title": "BeSMART cloud certificate could not be verified ({name})",
+            "description": "Home Assistant could not verify the TLS certificate of the BeSMART cloud for {name}, so it did not send your credentials. If the problem persists and you trust your network, you can disable 'Verify TLS certificate' in the integration options (not recommended)."
+        }
+    },
     "entity": {
+        "button": {
+            "read_technical_data": {
+                "name": "Read technical data"
+            },
+            "refresh_now": {
+                "name": "Refresh now"
+            }
+        },
         "sensor": {
             "battery_status": {
                 "state": {
@@ -72,14 +107,6 @@
             },
             "technical_data": {
                 "name": "Technical data"
-            }
-        },
-        "button": {
-            "read_technical_data": {
-                "name": "Read technical data"
-            },
-            "refresh_now": {
-                "name": "Refresh now"
             }
         }
     }
