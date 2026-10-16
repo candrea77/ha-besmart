@@ -30,6 +30,9 @@ body:
     id: extra
     attributes:
       label: Additional context
-      description: If the feature depends on cloud data, a redacted diagnostics dump showing the relevant fields helps a lot.
+      description: |
+        If the feature depends on cloud data, a diagnostics file (Settings → Devices & services →
+        BeSMART → ⋮ → Download diagnostics) showing the relevant fields helps a lot.
+        Never post your password, e-mail, token, user_id or wifi_box_id.
     validations:
       required: false

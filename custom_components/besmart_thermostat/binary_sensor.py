@@ -11,6 +11,9 @@ boiler payload already fetched by the coordinator (no extra cloud calls):
 
 All keys hold "0"/"1" strings (occasionally ints); anything else parses as
 unknown (None).
+
+PATCH 0.7: values are parsed with int(float(...)) like the water heater, so
+"1.0" is On instead of unknown.
 """
 
 import logging
@@ -85,7 +88,7 @@ class BesmartBoilerBinarySensor(
         if value is None:
             return None
         try:
-            return bool(int(value))
+            return bool(int(float(value)))
         except (ValueError, TypeError):
             return None
 

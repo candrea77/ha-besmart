@@ -1,0 +1,124 @@
+{
+    "title": "BeSMART Thermostat",
+    "config": {
+        "step": {
+            "user": {
+                "title": "Crea integrazione BeSMART",
+                "description": "Configura BeSMART autenticandoti con il servizio BeSMART.",
+                "data": {
+                    "name": "Nome",
+                    "username": "Nome utente",
+                    "password": "Password",
+                    "mode": "Modalità di funzionamento",
+                    "verify_ssl": "Verifica certificato TLS",
+                    "scan_interval": "Intervallo di aggiornamento (s)"
+                },
+                "data_description": {
+                    "name": "Nome dell'integrazione.",
+                    "username": "Nome utente dell'account BeSMART.",
+                    "password": "Password dell'account BeSMART.",
+                    "mode": "Modalità disponibili per il dispositivo BeSMART.",
+                    "verify_ssl": "Verifica il certificato TLS del cloud BeSMART. Disattiva solo se il login fallisce per una catena di certificati incompleta.",
+                    "scan_interval": "Ogni quanto interrogare il cloud BeSMART (il cloud si aggiorna circa ogni 3 minuti)."
+                }
+            },
+            "reauth_confirm": {
+                "title": "Nuova autenticazione BeSMART",
+                "description": "Il cloud BeSMART ha rifiutato le credenziali salvate per {name}. Inseriscile di nuovo.",
+                "data": {
+                    "username": "Nome utente",
+                    "password": "Password"
+                },
+                "data_description": {
+                    "username": "Nome utente dell'account BeSMART.",
+                    "password": "Password dell'account BeSMART."
+                }
+            },
+            "reconfigure": {
+                "title": "Aggiorna credenziali BeSMART",
+                "description": "Inserisci le nuove credenziali per {name}. Devono appartenere allo stesso account BeSMART.",
+                "data": {
+                    "username": "Nome utente",
+                    "password": "Password"
+                },
+                "data_description": {
+                    "username": "Nome utente dell'account BeSMART.",
+                    "password": "Password dell'account BeSMART."
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Credenziali non valide.",
+            "cannot_connect": "Impossibile connettersi al cloud BeSMART.",
+            "tls_error": "Impossibile verificare il certificato TLS del cloud BeSMART. Disattiva 'Verifica certificato TLS' solo se ti fidi della tua rete."
+        },
+        "abort": {
+            "already_configured": "Questo account BeSMART è già configurato.",
+            "reauth_successful": "Nuova autenticazione riuscita.",
+            "reconfigure_successful": "Credenziali aggiornate.",
+            "wrong_account": "Queste credenziali appartengono a un altro account BeSMART."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "description": "Per cambiare nome utente o password usa Riconfigura dal menu dell'integrazione.",
+                "data": {
+                    "name": "Nome",
+                    "mode": "Modalità di funzionamento",
+                    "verify_ssl": "Verifica certificato TLS",
+                    "scan_interval": "Intervallo di aggiornamento (s)"
+                },
+                "data_description": {
+                    "name": "Nome dell'integrazione.",
+                    "mode": "Modalità disponibili per il dispositivo BeSMART.",
+                    "verify_ssl": "Verifica il certificato TLS del cloud BeSMART. Disattiva solo se il login fallisce per una catena di certificati incompleta.",
+                    "scan_interval": "Ogni quanto interrogare il cloud BeSMART (il cloud si aggiorna circa ogni 3 minuti)."
+                }
+            }
+        }
+    },
+    "issues": {
+        "verify_ssl_disabled": {
+            "title": "Verifica TLS disattivata per {name}",
+            "description": "La verifica del certificato TLS del cloud BeSMART è disattivata per {name}: credenziali e identificativi vengono inviati senza verificare il server. Attiva 'Verifica certificato TLS' nelle opzioni dell'integrazione; lasciala disattivata solo se il login fallisce per una catena di certificati incompleta."
+        },
+        "tls_certificate_error": {
+            "title": "Certificato del cloud BeSMART non verificabile ({name})",
+            "description": "Home Assistant non è riuscito a verificare il certificato TLS del cloud BeSMART per {name} e non ha inviato le credenziali. Se il problema persiste e ti fidi della tua rete, puoi disattivare 'Verifica certificato TLS' nelle opzioni dell'integrazione (sconsigliato)."
+        }
+    },
+    "entity": {
+        "button": {
+            "read_technical_data": {
+                "name": "Leggi dati tecnici"
+            },
+            "refresh_now": {
+                "name": "Aggiorna ora"
+            }
+        },
+        "sensor": {
+            "battery_status": {
+                "state": {
+                    "low": "Bassa",
+                    "good": "Buona",
+                    "unknown": "Sconosciuta"
+                }
+            },
+            "technical_data": {
+                "name": "Dati tecnici",
+                "state_attributes": {
+                    "high_condensation_hours": {
+                        "name": "Ore di funzionamento in regime di elevata condensazione"
+                    },
+                    "heating_hours": {
+                        "name": "Ore di funzionamento in riscaldamento"
+                    },
+                    "dhw_hours": {
+                        "name": "Ore di funzionamento in sanitario"
+                    }
+                }
+            }
+        }
+    }
+}
