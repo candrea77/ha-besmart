@@ -127,8 +127,8 @@ async def test_sensitive_keys_scrubbed_even_with_unknown_values(make_client, cap
 
 def test_redact_masks_known_ids_but_not_other_numbers(make_client):
     client = make_client({})
-    text = client._redact(f"user {USER_ID} box {WIFI_BOX} took 14242 ms, 42420 bytes")
-    assert text == "user *** box ***0456 took 14242 ms, 42420 bytes"
+    text = client._redact(f"user {USER_ID} box {WIFI_BOX} took 1{USER_ID} ms, {USER_ID}0 bytes")
+    assert text == f"user *** box ***0456 took 1{USER_ID} ms, {USER_ID}0 bytes"
 
 
 def test_mask_wifi_box():

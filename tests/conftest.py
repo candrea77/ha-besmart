@@ -22,7 +22,9 @@ from custom_components.besmart_thermostat.coordinator import (  # noqa: E402
 
 USERNAME = "mario.rossi@example.com"
 PASSWORD = "p&ss w0rd"
-USER_ID = "4242"
+# Long and distinctive, so it cannot appear by chance in random ids/timestamps
+# that Home Assistant writes to the captured log.
+USER_ID = "987650123"
 WIFI_BOX = "100200300456"
 
 
