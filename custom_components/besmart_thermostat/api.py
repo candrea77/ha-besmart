@@ -35,6 +35,14 @@ _SENSITIVE_KEYS = frozenset(
     }
 )
 
+# PATCH 0.7 (security): keys whose values are reduced to the last 4
+# characters in logged payloads (thermostat/room/boiler ids).
+_MASKED_ID_KEYS = frozenset({"id", "thermostat_id", "room_id"})
+
+# PATCH 0.7: ids shorter than this are masked only under _MASKED_ID_KEYS,
+# never by free-text replacement (it would mangle ordinary numbers).
+_MIN_TEXT_MASK_LEN = 4
+
 # PATCH 0.7 (security): upper bound for a cloud response body.
 MAX_RESPONSE_BYTES = 512 * 1024
 
@@ -180,6 +188,7 @@ class BesmartClient:
         # appear in log text (they act as credentials).
         self._known_user_ids: set[str] = set()
         self._known_wifi_boxes: set[str] = set()
+        self._known_thermostat_ids: set[str] = set()
         # verify_ssl is a config option. async_get_clientsession caches one
         # session per verify_ssl flag, so True reuses HA's shared verified
         # session and False uses an isolated no-verify session.
@@ -217,7 +226,7 @@ class BesmartClient:
                 text = text.replace(secret, "***")
         text = _USER_ID_RE.sub(r"\1***", text)
         text = _WIFI_BOX_RE.sub(r"\1***\2", text)
-        for box in self._known_wifi_boxes:
+        for box in self._known_wifi_boxes | self._known_thermostat_ids:
             text = re.sub(rf"(?<![\w*]){re.escape(box)}(?!\w)", mask_id(box), text)
         for uid in self._known_user_ids:
             text = re.sub(rf"(?<![\w*]){re.escape(uid)}(?!\w)", "***", text)
@@ -226,12 +235,21 @@ class BesmartClient:
     def _redact_payload(self, payload) -> str:
         """PATCH 0.7: redacted text of a cloud payload for debug logs."""
 
+        def scrub_item(key, value):
+            key = str(key).lower()
+            if key in _SENSITIVE_KEYS:
+                return "***"
+            if key in _MASKED_ID_KEYS and isinstance(value, (str, int)):
+                return mask_id(value)
+            if key == "program" and isinstance(value, list):
+                # PATCH 0.7: weekly program summarized (7 x 48 slots).
+                slots = max((len(d) for d in value if hasattr(d, "__len__")), default=0)
+                return f"{len(value)} days x {slots} slots"
+            return scrub(value)
+
         def scrub(obj):
             if isinstance(obj, dict):
-                return {
-                    k: ("***" if str(k).lower() in _SENSITIVE_KEYS else scrub(v))
-                    for k, v in obj.items()
-                }
+                return {k: scrub_item(k, v) for k, v in obj.items()}
             if isinstance(obj, list):
                 return [scrub(v) for v in obj]
             return obj
@@ -404,6 +422,10 @@ class BesmartClient:
             x for x in (message.get("thermostat") or [])
             if isinstance(x, dict) and x.get("id") is not None
         ]
+        # PATCH 0.7: thermostat ids are masked (last 4 chars) in later logs.
+        self._known_thermostat_ids.update(
+            str(x["id"]) for x in thermostats if len(str(x["id"])) >= _MIN_TEXT_MASK_LEN
+        )
         _LOGGER.debug("boiler: %s", self._redact_payload(boiler))
         _LOGGER.debug("thermostats: %s", self._redact_payload(thermostats))
         return {"boiler": boiler, "thermostats": thermostats}

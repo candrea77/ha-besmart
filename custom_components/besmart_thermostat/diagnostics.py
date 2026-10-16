@@ -43,7 +43,8 @@ def _pseudonymize(obj: Any, aliases: dict[str, str], redact) -> Any:
     """Replace wifi box ids (keys and values) and scrub strings."""
     if isinstance(obj, dict):
         return {
-            aliases.get(str(k), k): _pseudonymize(v, aliases, redact)
+            # PATCH 0.7: known thermostat ids used as keys are masked too.
+            aliases.get(str(k)) or (redact(k) if isinstance(k, str) else k): _pseudonymize(v, aliases, redact)
             for k, v in obj.items()
         }
     if isinstance(obj, list):

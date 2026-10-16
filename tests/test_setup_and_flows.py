@@ -526,3 +526,23 @@ async def test_migration_from_coder89_entry(hass, cloud, caplog):
     # Default update interval applied (coder89 had no option).
     assert entry.runtime_data.update_interval.total_seconds() == 300
     assert_no_secrets(caplog.text)
+
+
+async def test_diagnostics_mask_thermostat_ids(hass, cloud):
+    cloud.set_route(
+        "Wifi_boxes/data",
+        {
+            "status": True,
+            "message": {
+                "boiler": {"id": "b1"},
+                "thermostat": [{"id": "029410DD", "name": "Living", "unit": "0"}],
+            },
+        },
+    )
+    entry = v2_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    text = json.dumps(diag, default=str)
+    assert "029410DD" not in text
+    assert "***10DD" in diag["coordinator_data"]["box_1"]["thermostats"]

@@ -193,8 +193,9 @@ warning is shown in **Settings → Repairs**. Turn it off only if login fails
 because of a broken certificate chain and you trust your network.
 
 **What is redacted in logs.** Password, username/e-mail, the API token and
-the user id are removed; WiFi box ids are reduced to their last 4 characters
-(`***1234`); full request URLs are never logged, and error messages shown in
+the user id are removed; WiFi box, thermostat and boiler ids are reduced to
+their last 4 characters (`***1234`); the thermostat weekly program is
+summarized; full request URLs are never logged, and error messages shown in
 the UI never contain the original network error.
 
 **Sharing logs and diagnostics safely.**

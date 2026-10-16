@@ -327,3 +327,55 @@ def test_no_forbidden_or_unused_write_endpoints():
     assert not any("TSP" in e or "reset" in e.lower() for e in endpoints)
     for unused in ("program_196", "advance", "holiday_end_time", "thermostats/program"):
         assert not any(unused in e for e in endpoints), unused
+
+
+# ------------------------------------------- thermostat ids / program summary
+
+THERMOSTAT_ID = "029410DD"
+PROGRAM = [["2"] * 48 for _ in range(7)]
+
+
+async def test_thermostat_ids_masked_and_program_summarized(make_client, caplog):
+    """b3 feedback: thermostat ids were logged in clear, program in full."""
+    client = make_client(
+        {
+            "Wifi_boxes/data": {
+                "status": True,
+                "message": {
+                    "boiler": {"id": "B0099887"},
+                    "thermostat": [{"id": THERMOSTAT_ID, "name": "Living", "program": PROGRAM}],
+                },
+            },
+            "Thermostats/data": {
+                "status": True,
+                "message": {
+                    "id": THERMOSTAT_ID,
+                    "thermostat_id": THERMOSTAT_ID,
+                    "current_temp": "20.5",
+                    "program": PROGRAM,
+                    "note": f"room {THERMOSTAT_ID}",
+                },
+            },
+        }
+    )
+    with caplog.at_level(logging.DEBUG):
+        devices = await client.devices(WIFI_BOX)
+        data = await client.thermostat(WIFI_BOX, THERMOSTAT_ID)
+
+    # The returned data is untouched; only the logs are redacted.
+    assert devices["thermostats"][0]["id"] == THERMOSTAT_ID
+    assert data["program"] == PROGRAM
+
+    assert THERMOSTAT_ID not in caplog.text
+    assert "B0099887" not in caplog.text
+    assert "***10DD" in caplog.text and "***9887" in caplog.text
+    assert "7 days x 48 slots" in caplog.text
+    assert "'2', '2', '2'" not in caplog.text
+    assert "20.5" in caplog.text
+
+
+def test_short_ids_masked_by_key_but_not_in_free_text(make_client):
+    """A short room id like "1" must not turn every "1" in the logs into ***1."""
+    client = make_client({})
+    text = client._redact_payload({"id": "1", "mode": "1", "season": "1"})
+    assert text == "{'id': '***1', 'mode': '1', 'season': '1'}"
