@@ -1,6 +1,14 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b3 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+> **0.7.0b4 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+
+### Changes since 0.7.0b3
+- Debug logs: thermostat and boiler ids are reduced to their last 4
+  characters (they were shown in clear in the `thermostats` and
+  `thermostat data` lines), also as keys in the diagnostics file.
+- Debug logs: the thermostat weekly program is summarized
+  ("7 days x 48 slots") instead of being printed in full on every update.
+- No configuration changes: updating from 0.7.0b3 needs no migration.
 
 ### ⚠️ Before updating — breaking / irreversible
 - **Make a Home Assistant backup first.** On the first start the BeSMART
