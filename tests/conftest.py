@@ -181,3 +181,35 @@ def make_coordinator(make_client):
         return coordinator
 
     return _make
+
+
+# PATCH 0.7 (b8): Home Assistant reports deprecated usage through the
+# homeassistant.helpers.frame logger (e.g. "has an update listener and should
+# use it for scheduling a reload"): it is only a log line, so without this
+# fixture such problems pass CI unnoticed. Any frame warning, or any warning
+# record about deprecated usage by this integration, fails the test.
+_DOMAIN = "besmart_thermostat"
+
+
+@pytest.fixture(autouse=True)
+def fail_on_ha_deprecations(caplog):
+    yield
+    offending = [
+        record
+        for phase in ("setup", "call", "teardown")
+        for record in caplog.get_records(phase)
+        if record.levelno >= 30  # WARNING
+        and (
+            record.name.startswith("homeassistant.helpers.frame")
+            or (
+                "deprecat" in record.getMessage().lower()
+                and _DOMAIN in record.getMessage()
+            )
+        )
+    ]
+    if offending:
+        pytest.fail(
+            "Home Assistant reported deprecated usage:\n"
+            + "\n".join(f"[{r.name}] {r.getMessage()}" for r in offending),
+            pytrace=False,
+        )

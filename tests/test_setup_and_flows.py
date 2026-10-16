@@ -546,3 +546,51 @@ async def test_diagnostics_mask_thermostat_ids(hass, cloud):
     text = json.dumps(diag, default=str)
     assert "029410DD" not in text
     assert "***10DD" in diag["coordinator_data"]["box_1"]["thermostats"]
+
+
+async def test_options_change_reloads_entry_once(hass, cloud):
+    """b8: the reload comes from OptionsFlowWithReload (no update listener)."""
+    entry = v2_entry(unique_id=account_unique_id(USER_ID))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert not entry.update_listeners
+    with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {**OPTIONS, CONF_SCAN_INTERVAL: 240}
+        )
+    reload.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.parametrize("source", ["reauth", "reconfigure"])
+async def test_credentials_update_on_loaded_entry_reloads_without_warning(hass, cloud, caplog, source):
+    """b8 regression: Reconfigure on a loaded entry logged the frame
+    deprecation "has an update listener and should use it for scheduling a
+    reload" (breaks in HA 2026.12). The autouse fixture fails on it."""
+    import asyncio
+
+    entry = v2_entry(unique_id=account_unique_id(USER_ID))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # In tests HA runs tasks eagerly: an update listener would reload (and
+    # unload, removing itself) synchronously, before HA checks
+    # entry.update_listeners, hiding the warning. On a real installation the
+    # reload suspends first; reproduce that ordering.
+    original_reload = hass.config_entries.async_reload
+
+    async def suspending_reload(entry_id):
+        await asyncio.sleep(0)
+        return await original_reload(entry_id)
+
+    with patch.object(hass.config_entries, "async_reload", suspending_reload):
+        result = await _start(hass, entry, source)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_USERNAME: USERNAME, CONF_PASSWORD: "new pass"}
+        )
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data[CONF_PASSWORD] == "new pass"
+    assert entry.state is ConfigEntryState.LOADED

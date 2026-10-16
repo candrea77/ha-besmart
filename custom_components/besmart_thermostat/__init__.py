@@ -155,17 +155,12 @@ async def async_setup_entry(
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_config_entry_update_listener))
+    # PATCH 0.7 (b8): no update listener. Reloads are scheduled by the flows:
+    # OptionsFlowWithReload for options, async_update_reload_and_abort for
+    # reauth/reconfigure (an update listener made HA log a deprecation that
+    # breaks in 2026.12, and caused a double reload after reauth).
 
     return True
-
-
-async def async_config_entry_update_listener(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-) -> None:
-    """Update listener, called when the config entry options are changed."""
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_remove_config_entry_device(

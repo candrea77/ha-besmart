@@ -23,6 +23,7 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import (
     CONF_NAME,
@@ -234,8 +235,12 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
 
-class BesmartOptionsFlow(OptionsFlow):
-    """PATCH 0.7: options without credentials (use Reconfigure for those)."""
+class BesmartOptionsFlow(OptionsFlowWithReload):
+    """PATCH 0.7: options without credentials (use Reconfigure for those).
+
+    OptionsFlowWithReload reloads the entry when the options change (the
+    integration has no update listener, see __init__.py).
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

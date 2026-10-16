@@ -1,14 +1,25 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b7 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+> **0.7.0b8 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
 
-### Changes since 0.7.0b6
+### Changes since 0.7.0b7
+- **Reconfigure / reauthentication / options:** fixed the warning
+  "Detected that custom integration 'besmart_thermostat' has an update
+  listener and should use it for scheduling a reload. This will stop working
+  in Home Assistant 2026.12.0". The integration no longer registers an update
+  listener: options use Home Assistant's automatic reload, reauthentication
+  and reconfigure reload the entry themselves (this also removes a double
+  reload after reauthentication).
+- CI: tests now fail on any deprecation reported by Home Assistant for this
+  integration, on both the minimum supported and the latest version.
+- No configuration changes: updating from 0.7.0b3 or later needs no migration.
+
+### Changes in 0.7.0b7
 - **Technical data:** the attribute `heat_exchanger_hours` is renamed
   `high_condensation_hours`: the cloud counter `heat_exchanger_hours_amassed`
   is the app's "operating hours in high-condensation mode", not a heat
   exchanger cleaning counter. Update templates/automations that read the old
   attribute. Hour attributes now have translated names (EN/IT).
-- No configuration changes: updating from 0.7.0b3 or later needs no migration.
 
 ### Changes in 0.7.0b6
 - Thermostat settings are checked against the **limits of the official

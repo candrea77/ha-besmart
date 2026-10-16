@@ -49,6 +49,11 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
   A write fails only on HTTP error, `status: false` or `error_code` != 0.
 - All HTTP goes through `BesmartClient._request()` (timeout, 512 KB body cap,
   sanitized exceptions).
+- No config entry update listener: options use `OptionsFlowWithReload`,
+  reauth/reconfigure use `async_update_reload_and_abort` (HA deprecates
+  update listeners combined with flow reloads; breaks in 2026.12).
+- Tests fail on any `homeassistant.helpers.frame` warning or deprecation
+  attributed to this integration (`tests/conftest.py`, `pytest.ini`).
 
 - `api.py` — `BesmartClient`, one method per endpoint. Read methods return
   `None` on error (logging a redacted warning); `ConfigEntryAuthFailed` always
