@@ -106,7 +106,18 @@
                 }
             },
             "technical_data": {
-                "name": "Dati tecnici"
+                "name": "Dati tecnici",
+                "state_attributes": {
+                    "high_condensation_hours": {
+                        "name": "Ore di funzionamento in regime di elevata condensazione"
+                    },
+                    "heating_hours": {
+                        "name": "Ore di funzionamento in riscaldamento"
+                    },
+                    "dhw_hours": {
+                        "name": "Ore di funzionamento in sanitario"
+                    }
+                }
             }
         }
     }

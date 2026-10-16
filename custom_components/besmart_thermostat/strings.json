@@ -106,7 +106,18 @@
                 }
             },
             "technical_data": {
-                "name": "Technical data"
+                "name": "Technical data",
+                "state_attributes": {
+                    "high_condensation_hours": {
+                        "name": "Operating hours in high-condensation mode"
+                    },
+                    "heating_hours": {
+                        "name": "Operating hours in heating"
+                    },
+                    "dhw_hours": {
+                        "name": "Operating hours in DHW"
+                    }
+                }
             }
         }
     }

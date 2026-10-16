@@ -112,7 +112,8 @@ async def test_coordinator_partial_failure_and_attributes(make_coordinator):
     assert attrs["dhw_flow_rate"] is None  # unsupported
     assert attrs["return_temperature"] is None  # DNCON
     assert attrs["pressure_bar"] == 1.5
-    assert attrs["heat_exchanger_hours"] == 1234.0
+    assert attrs["high_condensation_hours"] == 1234.0
+    assert "heat_exchanger_hours" not in attrs
     assert attrs["heating_hours"] == 5678.0 and attrs["dhw_hours"] == 90.0
     assert attrs["outdoor_temperature"] == -3.5
     assert attrs["flame"] is True

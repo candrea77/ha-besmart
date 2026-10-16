@@ -303,8 +303,13 @@ class BoilerModulationSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Se
 
 # PATCH 0.7 (b2): technical endpoint -> attribute name. Numeric values go
 # through parse_value() (invalid -> None, "0.0" -> 0.0); endpoints that failed
-# or are unsupported give None. heat_exchanger_hours_amassed is the app's
-# "heat exchanger cleaning" counter, not burner hours.
+# or are unsupported give None. Hour counters, with the official app's labels
+# (values-it/strings.xml):
+# - heat_exchanger_hours_amassed: "Ore di funzionamento in regime di elevata
+#   condensazione" (operating hours in high-condensation mode; the resource
+#   id says "cleaning", the label does not);
+# - worked_hours_in_heating: "Ore di funzionamento in riscaldamento";
+# - worked_hours_in_dhw: "Ore di funzionamento in sanitario".
 TECHNICAL_NUMERIC_ATTRIBUTES = {
     "system_pressure": "pressure_bar",
     "flow_temperature": "flow_temperature",
@@ -315,7 +320,7 @@ TECHNICAL_NUMERIC_ATTRIBUTES = {
     "heating_set_point": "heating_set_point",
     "dhw_flow_rate": "dhw_flow_rate",
     "external_temperature": "outdoor_temperature",
-    "heat_exchanger_hours_amassed": "heat_exchanger_hours",
+    "heat_exchanger_hours_amassed": "high_condensation_hours",
     "worked_hours_in_heating": "heating_hours",
     "worked_hours_in_dhw": "dhw_hours",
 }

@@ -112,7 +112,7 @@ One **BeSMART WiFi box** device is created per account, with:
 | Boiler Flame / Boiler Circulator / DHW Tap | binary_sensor | Boiler states reported by the cloud (see [Known limitations](#known-limitations)). |
 | **Refresh now** (*Aggiorna ora*) | button | Immediate refresh of all polled data. Presses less than 10 s apart, or during a refresh, are ignored. |
 | **Read technical data** (*Leggi dati tecnici*) | button (diagnostic) | Reads the boiler technical values once (never polled). 30 s cooldown. |
-| Technical data (*Dati tecnici*) | sensor (diagnostic) | State = time of the last reading; attributes: `modulation_pct`, `pressure_bar`, `flow_temperature`, `return_temperature`, `flue_temperature`, `dhw_temperature`, `dhw_set_point`, `heating_set_point`, `dhw_flow_rate`, `flame`, `outdoor_temperature`, `heat_exchanger_hours`, `heating_hours`, `dhw_hours`, `temperature_unit`, `unsupported_endpoints`. Restored after a restart. |
+| Technical data (*Dati tecnici*) | sensor (diagnostic) | State = time of the last reading; attributes: `modulation_pct`, `pressure_bar`, `flow_temperature`, `return_temperature`, `flue_temperature`, `dhw_temperature`, `dhw_set_point`, `heating_set_point`, `dhw_flow_rate`, `flame`, `outdoor_temperature`, `high_condensation_hours` (operating hours in high-condensation mode), `heating_hours` (operating hours in heating), `dhw_hours` (operating hours in DHW), `temperature_unit`, `unsupported_endpoints`. Restored after a restart. |
 
 Boiler entities are created only when the WiFi box reports a boiler.
 

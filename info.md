@@ -9,6 +9,11 @@
   climatic curve only 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5 or 3.0,
   sensor influence 0–20. Values outside these limits are treated like the
   partial zeros: the last valid value is kept and no settings are written.
+- **Technical data:** the attribute `heat_exchanger_hours` is renamed
+  `high_condensation_hours`: the cloud counter `heat_exchanger_hours_amassed`
+  is the app's "operating hours in high-condensation mode", not a heat
+  exchanger cleaning counter. Update templates/automations that read the old
+  attribute. Hour attributes now have translated names (EN/IT).
 - No configuration changes: updating from 0.7.0b3 or later needs no migration.
 
 ### Changes in 0.7.0b5
@@ -53,7 +58,8 @@
   within 10 s, or during a refresh, are ignored).
 - **Read technical data** button and **Technical data** sensor: on-demand
   reading of the boiler technical values (flow/return/flue temperatures, DHW
-  values, flame, heat exchanger / heating / DHW hours, ...), never polled;
+  values, flame, operating hours in heating / DHW / high-condensation
+  mode, ...), never polled;
   endpoints not supported by your boiler are listed in
   `unsupported_endpoints`. The last reading survives restarts.
 - **Reconfigure** step to change the account credentials.
