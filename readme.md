@@ -30,8 +30,15 @@ through the BeSMART cloud — the same service used by the official app.
 
 ## Requirements
 
-- Home Assistant **2026.7.0** or newer.
+- **Minimum version:** Home Assistant **2026.7** (also declared in `hacs.json`).
 - A BeSMART account working in the official app (WiFi box online).
+
+Tested on:
+
+- **Real installation:** Home Assistant **2026.10.1** with a Beretta Mynute
+  X 30 C and 2 BeSMART thermostats.
+- **CI (automated tests):** Home Assistant **2026.7** and the **latest stable
+  release**.
 
 ## Installation
 
@@ -118,7 +125,8 @@ Boiler entities are created only when the WiFi box reports a boiler.
 
 ## Tested devices
 
-- **Beretta Mynute X 30 C** with BeSMART WiFi thermostat.
+- **Beretta Mynute X 30 C** with 2 BeSMART WiFi thermostats
+  (Home Assistant 2026.10.1).
 
 Other BeSMART-compatible boilers should work; please report your model in an
 issue (with a diagnostics file) so it can be added here.
