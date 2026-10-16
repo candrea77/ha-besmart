@@ -1,14 +1,27 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b4 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+> **0.7.0b5 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
 
-### Changes since 0.7.0b3
+### Changes since 0.7.0b4
+- **Partial thermostat data:** the cloud sometimes reports a thermostat's
+  set points as 0 (comfort/economy/frost temperature, min/max heating set
+  point, climatic curve), usually with `cmd_stand_status` "1", while the
+  current and target temperatures are valid. Those 0 values are no longer
+  shown in Home Assistant: the last valid value of that thermostat is kept
+  (debug log: "partial thermostat data").
+- **Season switch safety:** no settings are written if the thermostat
+  reports `cmd_stand_status` "1" or if min/max heating set point or the
+  climatic curve are 0 or out of range.
+- **Read technical data:** timeout per request raised from 5 s to 10 s
+  (some endpoints always timed out on the first attempt); retries unchanged.
+- No configuration changes: updating from 0.7.0b3/b4 needs no migration.
+
+### Changes in 0.7.0b4
 - Debug logs: thermostat and boiler ids are reduced to their last 4
   characters (they were shown in clear in the `thermostats` and
   `thermostat data` lines), also as keys in the diagnostics file.
 - Debug logs: the thermostat weekly program is summarized
   ("7 days x 48 slots") instead of being printed in full on every update.
-- No configuration changes: updating from 0.7.0b3 needs no migration.
 
 ### ⚠️ Before updating — breaking / irreversible
 - **Make a Home Assistant backup first.** On the first start the BeSMART

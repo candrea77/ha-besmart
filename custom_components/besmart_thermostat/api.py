@@ -55,6 +55,10 @@ SEASONS = frozenset({"0", "1"})  # cooling, heating
 BOILER_MODES = frozenset({"0", "1", "2"})
 DHW_TEMP_MIN = 30
 DHW_TEMP_MAX = 60
+# PATCH 0.7 (b5): plausible ranges of the thermostat settings written back by
+# setThermostatSeason (0 means "not reported" in partial cloud reads).
+HEATING_SET_POINT_MAX = 90.0
+CLIMATIC_CURVE_MAX = 5.0
 
 
 class BesmartError(Exception):
@@ -160,7 +164,9 @@ class BesmartClient:
     )
     # Same limits as the official app's technical area.
     TECHNICAL_CONCURRENCY = 3
-    TECHNICAL_TIMEOUT = 5
+    # PATCH 0.7 (b5): 10 s; with 5 s dhw_flow_rate and
+    # heat_exchanger_hours_amassed always timed out on the first attempt.
+    TECHNICAL_TIMEOUT = 10
     TECHNICAL_ATTEMPTS = 3
     TECHNICAL_RETRY_DELAY = 1
     SET_BOILER_MODE = "Android/Boilers/work_mode"
@@ -667,6 +673,23 @@ class BesmartClient:
         ):
             _LOGGER.warning(
                 "Error in setThermostatSeason(): incomplete thermostat settings, nothing sent"
+            )
+            return False
+        # PATCH 0.7 (b5): partial cloud reads report the set points and the
+        # climatic curve as 0 (with cmd_stand_status "1"): never write those
+        # back to the thermostat.
+        set_min = parse_value(settings.get("min_heating_set_point"))
+        set_max = parse_value(settings.get("max_heating_set_point"))
+        curve = parse_value(settings.get("climatic_curve"))
+        if (
+            str(settings.get("cmd_stand_status", "")).strip() == "1"
+            or not 0 < set_min <= set_max <= HEATING_SET_POINT_MAX
+            or not 0 < curve <= CLIMATIC_CURVE_MAX
+        ):
+            _LOGGER.warning(
+                "Error in setThermostatSeason(): partial or out-of-range thermostat "
+                "settings (thermostat %s), nothing sent",
+                mask_id(thermostat),
             )
             return False
 

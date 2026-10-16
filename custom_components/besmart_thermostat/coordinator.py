@@ -47,7 +47,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import BesmartClient
+from .api import BesmartClient, mask_id, parse_value
 from .const import (
     DOMAIN,
     CONF_SCAN_INTERVAL,
@@ -57,6 +57,21 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# PATCH 0.7 (b5): thermostat set points that a partial cloud read reports
+# as 0 (together, often, with cmd_stand_status "1"). A 0 / invalid value is
+# replaced by the last valid one of that thermostat.
+THERMOSTAT_SETPOINT_FIELDS = (
+    "comfort_temp",
+    "economy_temp",
+    "frost_temp",
+    "min_heating_set_point",
+    "max_heating_set_point",
+    "climatic_curve",
+)
+# 0 is a legitimate value for this one: treated as stale only when the read
+# is already partial and cmd_stand_status is "1".
+THERMOSTAT_SENSOR_INFLUENCE = "sensor_influence"
 
 # PATCH 0.7: minimum seconds between two accepted "Refresh now" presses.
 MANUAL_REFRESH_COOLDOWN = 10
@@ -97,6 +112,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         self.technical: dict[str, dict] = {}
         self._technical_locks: dict[str, asyncio.Lock] = {}
         self._last_technical_read: dict[str, float] = {}
+        # PATCH 0.7 (b5): last valid set points per (wifi_box, room_id).
+        self._last_valid_setpoints: dict[tuple[str, str], dict] = {}
         # PATCH 0.7: "Refresh now" button state.
         self._manual_refresh_lock = asyncio.Lock()
         self._last_manual_refresh: float | None = None
@@ -157,6 +174,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
             for room_id, data in zip(room_ids, responses[1 : 1 + len(room_ids)]):
                 if isinstance(data, Exception) or data is None:
                     data = prev_box.get("thermostats", {}).get(room_id)
+                elif isinstance(data, dict):
+                    data = self._sanitize_thermostat(wifi_box, room_id, data)
                 if data is not None:
                     thermostats[room_id] = data
 
@@ -185,6 +204,53 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
             raise UpdateFailed("No data returned from BeSMART cloud")
 
         return result
+
+    def _sanitize_thermostat(self, wifi_box: str, room_id: str, data: dict) -> dict:
+        """PATCH 0.7 (b5): keep the last valid set points on partial reads.
+
+        The cloud sometimes answers with comfort/economy/frost temperatures,
+        min/max heating set point and climatic curve all at 0 while the
+        current/target temperatures are valid. A 0 or invalid value of those
+        fields is replaced by the last valid one (or dropped if there is
+        none yet). cmd_stand_status "1" is only an extra hint: it never
+        marks a read as partial on its own.
+        """
+        last = self._last_valid_setpoints.setdefault((wifi_box, room_id), {})
+        invalid = [
+            field
+            for field in THERMOSTAT_SETPOINT_FIELDS
+            if field in data and not parse_value(data[field])
+        ]
+        stand_by = str(data.get("cmd_stand_status", "")).strip() == "1"
+        if (
+            invalid
+            and stand_by
+            and THERMOSTAT_SENSOR_INFLUENCE in data
+            and not parse_value(data[THERMOSTAT_SENSOR_INFLUENCE])
+        ):
+            invalid.append(THERMOSTAT_SENSOR_INFLUENCE)
+
+        for field in (*THERMOSTAT_SETPOINT_FIELDS, THERMOSTAT_SENSOR_INFLUENCE):
+            if field in data and field not in invalid:
+                last[field] = data[field]
+
+        if not invalid:
+            return data
+
+        data = dict(data)
+        for field in invalid:
+            if field in last:
+                data[field] = last[field]
+            else:
+                data.pop(field)
+        _LOGGER.debug(
+            "partial thermostat data for %s (cmd_stand_status=%s): "
+            "kept last valid %s",
+            mask_id(room_id),
+            data.get("cmd_stand_status"),
+            ", ".join(invalid),
+        )
+        return data
 
     # --- Convenience accessors used by entities -----------------------------
 

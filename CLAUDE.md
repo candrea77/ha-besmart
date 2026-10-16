@@ -36,7 +36,7 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    `Boilers/technical_datas` no longer exists (404): do not use it.
 5. **Don't hammer the cloud.** No new polled calls without the maintainer's
    approval; technical endpoints are read only on button press (max 3
-   concurrent, 5 s timeout, 3 attempts, no retry on 404). The cloud refreshes
+   concurrent, 10 s timeout, 3 attempts, no retry on 404). The cloud refreshes
    module data only every ~3 minutes.
 
 ## Architecture

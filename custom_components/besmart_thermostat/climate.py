@@ -26,7 +26,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .api import BesmartValidationError
+from .api import BesmartValidationError, parse_value
 from .coordinator import BesmartDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -238,19 +238,13 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         elif self._current_state == self.IDLE:
             self._tempSetMark = "0"
 
-        # Extract programmed temperatures
-        try:
-            self._frostT = float(thermostat.get("frost_temp", 0.0))
-        except (ValueError, TypeError):
-            self._frostT = 0.0
-        try:
-            self._saveT = float(thermostat.get("economy_temp", 0.0))
-        except (ValueError, TypeError):
-            self._saveT = 0.0
-        try:
-            self._comfT = float(thermostat.get("comfort_temp", 0.0))
-        except (ValueError, TypeError):
-            self._comfT = 0.0
+        # Extract programmed temperatures.
+        # PATCH 0.7 (b5): a missing, invalid or 0 set point (partial cloud
+        # read, see the coordinator) keeps the previous value instead of
+        # becoming 0.0.
+        self._frostT = parse_value(thermostat.get("frost_temp")) or self._frostT
+        self._saveT = parse_value(thermostat.get("economy_temp")) or self._saveT
+        self._comfT = parse_value(thermostat.get("comfort_temp")) or self._comfT
 
         # Extract current temperature
         try:

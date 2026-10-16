@@ -167,6 +167,7 @@ def make_coordinator(make_client):
         coordinator.technical = {}
         coordinator._technical_locks = {}
         coordinator._last_technical_read = {}
+        coordinator._last_valid_setpoints = {}
         coordinator._manual_refresh_lock = asyncio.Lock()
         coordinator._last_manual_refresh = None
         coordinator.last_update_success = True
