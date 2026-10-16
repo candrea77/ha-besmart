@@ -144,13 +144,23 @@ WRITE_OK = {"error_code": 0, "status": True}
     "override",
     [
         {"cmd_stand_status": "1"},
+        # partial read: zeros
         {"min_heating_set_point": "0.0"},
         {"max_heating_set_point": "0.0"},
         {"climatic_curve": "0.0"},
-        {"min_heating_set_point": "40", "max_heating_set_point": "35"},
-        {"max_heating_set_point": "95"},
-        {"climatic_curve": "7.5"},
         {**{k: "0.0" for k in ("min_heating_set_point", "max_heating_set_point", "climatic_curve")}, "sensor_influence": "0", "cmd_stand_status": "1"},
+        # official app limits (Setting.java)
+        {"max_heating_set_point": "14.9"},
+        {"max_heating_set_point": "80.5"},
+        {"min_heating_set_point": "9.9"},
+        {"min_heating_set_point": "75.5", "max_heating_set_point": "80"},
+        {"min_heating_set_point": "40", "max_heating_set_point": "35"},  # min > max
+        {"climatic_curve": "0.1"},
+        {"climatic_curve": "0.3"},  # in range but not an app value
+        {"climatic_curve": "1.4"},
+        {"climatic_curve": "3.5"},
+        {"sensor_influence": "21"},
+        {"sensor_influence": "-1"},
     ],
 )
 async def test_season_refuses_partial_or_out_of_range_settings(make_client, caplog, override):
@@ -160,6 +170,56 @@ async def test_season_refuses_partial_or_out_of_range_settings(make_client, capl
     assert await client.setThermostatSeason(WIFI_BOX, ROOM, "1") is False
     assert client._session.puts == []
     assert ROOM not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"max_heating_set_point": "15", "min_heating_set_point": "10"},  # lower limits
+        {"max_heating_set_point": "80", "min_heating_set_point": "75"},  # upper limits
+        {"max_heating_set_point": "35", "min_heating_set_point": "35"},  # min == max
+        {"climatic_curve": "0.2"},
+        {"climatic_curve": "1.5"},
+        {"climatic_curve": "3.0"},
+        {"climatic_curve": "2"},
+        {"sensor_influence": "0"},
+        {"sensor_influence": "20"},
+    ],
+)
+async def test_season_accepts_app_limits(make_client, override):
+    client = make_client(
+        {"thermostats/setting": {"status": True, "message": {**SETTINGS, **override}}, "Thermostats/setting": WRITE_OK}
+    )
+    assert await client.setThermostatSeason(WIFI_BOX, ROOM, "1") is True
+    assert len(client._session.puts) == 1
+
+
+@pytest.mark.parametrize(
+    ("override", "kept"),
+    [
+        ({"max_heating_set_point": "85"}, {"max_heating_set_point": "35.0"}),
+        ({"min_heating_set_point": "8"}, {"min_heating_set_point": "24.0"}),
+        ({"min_heating_set_point": "40"}, {"min_heating_set_point": "24.0", "max_heating_set_point": "35.0"}),
+        ({"climatic_curve": "0.7"}, {"climatic_curve": "0.6"}),
+        ({"sensor_influence": "25"}, {"sensor_influence": "10"}),
+    ],
+)
+async def test_out_of_range_reads_keep_last_valid(make_coordinator, override, kept):
+    """Readings outside the app limits are treated like the partial zeros."""
+    bad = {"status": True, "message": {**COMPLETE["message"], **override}}
+    co = coordinator_for(make_coordinator, [COMPLETE, bad])
+    await refresh(co)
+    data = await refresh(co)
+    for field, value in kept.items():
+        assert data[field] == value, field
+
+
+async def test_in_range_reads_are_accepted(make_coordinator):
+    new = {"status": True, "message": {**COMPLETE["message"], "max_heating_set_point": "80", "min_heating_set_point": "10", "climatic_curve": "3.0", "sensor_influence": "20"}}
+    co = coordinator_for(make_coordinator, [COMPLETE, new])
+    await refresh(co)
+    data = await refresh(co)
+    assert (data["max_heating_set_point"], data["min_heating_set_point"], data["climatic_curve"], data["sensor_influence"]) == ("80", "10", "3.0", "20")
 
 
 async def test_season_with_valid_settings_is_sent(make_client):

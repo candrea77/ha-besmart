@@ -55,10 +55,47 @@ SEASONS = frozenset({"0", "1"})  # cooling, heating
 BOILER_MODES = frozenset({"0", "1", "2"})
 DHW_TEMP_MIN = 30
 DHW_TEMP_MAX = 60
-# PATCH 0.7 (b5): plausible ranges of the thermostat settings written back by
-# setThermostatSeason (0 means "not reported" in partial cloud reads).
-HEATING_SET_POINT_MAX = 90.0
-CLIMATIC_CURVE_MAX = 5.0
+# PATCH 0.7 (b6): thermostat settings limits of the official app
+# (Setting.java): seekbars 0-65 + 15 / + 10, fixed climatic curve values.
+# 0 means "not reported" in partial cloud reads and is never valid here.
+MAX_HEATING_SET_POINT_RANGE = (15.0, 80.0)
+MIN_HEATING_SET_POINT_RANGE = (10.0, 75.0)
+CLIMATIC_CURVES = (0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0)
+SENSOR_INFLUENCE_RANGE = (0.0, 20.0)
+
+
+def _in_range(value, bounds) -> bool:
+    return value is not None and bounds[0] <= value <= bounds[1]
+
+
+def valid_max_heating_set_point(value) -> bool:
+    """PATCH 0.7: 15-80 °C."""
+    return _in_range(parse_value(value), MAX_HEATING_SET_POINT_RANGE)
+
+
+def valid_min_heating_set_point(value) -> bool:
+    """PATCH 0.7: 10-75 °C."""
+    return _in_range(parse_value(value), MIN_HEATING_SET_POINT_RANGE)
+
+
+def valid_heating_set_points(min_value, max_value) -> bool:
+    """PATCH 0.7: both in range and min <= max."""
+    return (
+        valid_min_heating_set_point(min_value)
+        and valid_max_heating_set_point(max_value)
+        and parse_value(min_value) <= parse_value(max_value)
+    )
+
+
+def valid_climatic_curve(value) -> bool:
+    """PATCH 0.7: only the values offered by the official app."""
+    curve = parse_value(value)
+    return curve is not None and any(abs(curve - c) < 1e-6 for c in CLIMATIC_CURVES)
+
+
+def valid_sensor_influence(value) -> bool:
+    """PATCH 0.7: 0-20 (0 is a legitimate value)."""
+    return _in_range(parse_value(value), SENSOR_INFLUENCE_RANGE)
 
 
 class BesmartError(Exception):
@@ -675,16 +712,16 @@ class BesmartClient:
                 "Error in setThermostatSeason(): incomplete thermostat settings, nothing sent"
             )
             return False
-        # PATCH 0.7 (b5): partial cloud reads report the set points and the
-        # climatic curve as 0 (with cmd_stand_status "1"): never write those
-        # back to the thermostat.
-        set_min = parse_value(settings.get("min_heating_set_point"))
-        set_max = parse_value(settings.get("max_heating_set_point"))
-        curve = parse_value(settings.get("climatic_curve"))
+        # PATCH 0.7 (b5/b6): partial cloud reads report the set points and
+        # the climatic curve as 0 (with cmd_stand_status "1"): never write
+        # those back. Limits are the official app's (see valid_* helpers).
         if (
             str(settings.get("cmd_stand_status", "")).strip() == "1"
-            or not 0 < set_min <= set_max <= HEATING_SET_POINT_MAX
-            or not 0 < curve <= CLIMATIC_CURVE_MAX
+            or not valid_heating_set_points(
+                settings.get("min_heating_set_point"), settings.get("max_heating_set_point")
+            )
+            or not valid_climatic_curve(settings.get("climatic_curve"))
+            or not valid_sensor_influence(settings.get("sensor_influence"))
         ):
             _LOGGER.warning(
                 "Error in setThermostatSeason(): partial or out-of-range thermostat "

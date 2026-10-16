@@ -1,8 +1,17 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b5 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
+> **0.7.0b6 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
 
-### Changes since 0.7.0b4
+### Changes since 0.7.0b5
+- Thermostat settings are checked against the **limits of the official
+  app**, both when reading them from the cloud and before a season switch:
+  max heating set point 15–80 °C, min heating set point 10–75 °C (min ≤ max),
+  climatic curve only 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5 or 3.0,
+  sensor influence 0–20. Values outside these limits are treated like the
+  partial zeros: the last valid value is kept and no settings are written.
+- No configuration changes: updating from 0.7.0b3 or later needs no migration.
+
+### Changes in 0.7.0b5
 - **Partial thermostat data:** the cloud sometimes reports a thermostat's
   set points as 0 (comfort/economy/frost temperature, min/max heating set
   point, climatic curve), usually with `cmd_stand_status` "1", while the
@@ -11,10 +20,9 @@
   (debug log: "partial thermostat data").
 - **Season switch safety:** no settings are written if the thermostat
   reports `cmd_stand_status` "1" or if min/max heating set point or the
-  climatic curve are 0 or out of range.
+  climatic curve are 0.
 - **Read technical data:** timeout per request raised from 5 s to 10 s
   (some endpoints always timed out on the first attempt); retries unchanged.
-- No configuration changes: updating from 0.7.0b3/b4 needs no migration.
 
 ### Changes in 0.7.0b4
 - Debug logs: thermostat and boiler ids are reduced to their last 4

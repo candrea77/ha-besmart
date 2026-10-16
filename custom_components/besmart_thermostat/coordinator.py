@@ -47,7 +47,16 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import BesmartClient, mask_id, parse_value
+from .api import (
+    BesmartClient,
+    mask_id,
+    parse_value,
+    valid_climatic_curve,
+    valid_heating_set_points,
+    valid_max_heating_set_point,
+    valid_min_heating_set_point,
+    valid_sensor_influence,
+)
 from .const import (
     DOMAIN,
     CONF_SCAN_INTERVAL,
@@ -210,23 +219,38 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
 
         The cloud sometimes answers with comfort/economy/frost temperatures,
         min/max heating set point and climatic curve all at 0 while the
-        current/target temperatures are valid. A 0 or invalid value of those
-        fields is replaced by the last valid one (or dropped if there is
-        none yet). cmd_stand_status "1" is only an extra hint: it never
+        current/target temperatures are valid. A 0, invalid or out-of-range
+        value of those fields (limits of the official app, see api.py) is
+        replaced by the last valid one (or dropped if there is none yet). cmd_stand_status "1" is only an extra hint: it never
         marks a read as partial on its own.
         """
         last = self._last_valid_setpoints.setdefault((wifi_box, room_id), {})
+        # PATCH 0.7 (b6): besides 0, values outside the official app's
+        # limits are not valid either (min/max set point, climatic curve,
+        # sensor influence; min must not exceed max).
+        validators = {
+            "min_heating_set_point": valid_min_heating_set_point,
+            "max_heating_set_point": valid_max_heating_set_point,
+            "climatic_curve": valid_climatic_curve,
+        }
         invalid = [
             field
             for field in THERMOSTAT_SETPOINT_FIELDS
-            if field in data and not parse_value(data[field])
+            if field in data
+            and not (validators.get(field, parse_value))(data[field])
         ]
-        stand_by = str(data.get("cmd_stand_status", "")).strip() == "1"
+        set_min, set_max = "min_heating_set_point", "max_heating_set_point"
         if (
-            invalid
-            and stand_by
-            and THERMOSTAT_SENSOR_INFLUENCE in data
-            and not parse_value(data[THERMOSTAT_SENSOR_INFLUENCE])
+            set_min in data and set_max in data
+            and set_min not in invalid and set_max not in invalid
+            and not valid_heating_set_points(data[set_min], data[set_max])
+        ):
+            invalid += [set_min, set_max]
+        stand_by = str(data.get("cmd_stand_status", "")).strip() == "1"
+        influence = data.get(THERMOSTAT_SENSOR_INFLUENCE)
+        if THERMOSTAT_SENSOR_INFLUENCE in data and (
+            not valid_sensor_influence(influence)
+            or (invalid and stand_by and not parse_value(influence))
         ):
             invalid.append(THERMOSTAT_SENSOR_INFLUENCE)
 
