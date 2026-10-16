@@ -458,3 +458,71 @@ async def test_water_heater_out_of_range_is_rejected(hass, cloud):
         "water_heater", "set_temperature", {"entity_id": entity_id, "temperature": 50}, blocking=True
     )
     assert cloud.puts[-1][1]["temp"] == 50
+
+
+# ------------------------------------------- migration from coder89/ha-besmart
+
+
+async def test_migration_from_coder89_entry(hass, cloud, caplog):
+    """Entry created by coder89/ha-besmart (same domain, last version d88fdd2).
+
+    Its SchemaConfigFlowHandler (VERSION 1) stored everything in options:
+    name, username, password, mode; no verify_ssl, no scan_interval, empty
+    data. Climate/water heater unique_ids and the device identifier are the
+    same as ours, so those entities keep their entity_id and history.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        title="Casa",
+        data={},
+        options={
+            CONF_NAME: "Casa",
+            CONF_USERNAME: USERNAME,
+            CONF_PASSWORD: PASSWORD,
+            CONF_MODE: ["heat"],
+        },
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    climate = registry.async_get_or_create(
+        "climate", DOMAIN, f"{entry.entry_id}:r1",
+        suggested_object_id="living_thermostat", config_entry=entry,
+    )
+    heater = registry.async_get_or_create(
+        "water_heater", DOMAIN, f"{entry.entry_id}:{WIFI_BOX}:water_heater",
+        suggested_object_id="water_heater", config_entry=entry,
+    )
+    old_battery = registry.async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}:r1_battery",
+        suggested_object_id="living_thermostat_battery", config_entry=entry,
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.version == 2
+    assert entry.data == {CONF_USERNAME: USERNAME, CONF_PASSWORD: PASSWORD}
+    assert entry.options == {CONF_NAME: "Casa", CONF_MODE: ["heat"], CONF_VERIFY_SSL: True}
+    assert entry.unique_id == account_unique_id(USER_ID)
+    assert cloud.factory.call_args.kwargs["verify_ssl"] is True
+
+    # Same entity_ids, now provided by this integration.
+    assert registry.async_get_entity_id("climate", DOMAIN, f"{entry.entry_id}:r1") == climate.entity_id
+    assert hass.states.get(climate.entity_id) is not None
+    assert registry.async_get_entity_id(
+        "water_heater", DOMAIN, f"{entry.entry_id}:{WIFI_BOX}:water_heater"
+    ) == heater.entity_id
+    assert hass.states.get(heater.entity_id) is not None
+    # coder89's percentage battery sensor has no counterpart: it is left
+    # orphaned (documented in the README) and the enum sensor is created.
+    assert hass.states.get(old_battery.entity_id) is None or (
+        hass.states.get(old_battery.entity_id).state == "unavailable"
+    )
+    assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}:r1_battery_status")
+    # Default update interval applied (coder89 had no option).
+    assert entry.runtime_data.update_interval.total_seconds() == 300
+    assert_no_secrets(caplog.text)

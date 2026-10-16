@@ -47,13 +47,44 @@ through the BeSMART cloud — the same service used by the official app.
 > [!NOTE]
 > This integration uses the domain `besmart_thermostat`, like
 > [coder89/ha-besmart](https://github.com/coder89/ha-besmart): only one of the
-> two can be installed. Remove the other repository from HACS (and restart)
-> before installing this one.
+> two can be installed at a time. Coming from coder89? See
+> [Switching from coder89/ha-besmart](#switching-from-coder89ha-besmart).
 
 ### Manual
 
 Copy `custom_components/besmart_thermostat` into the `custom_components`
 folder of your Home Assistant configuration and restart.
+
+### Switching from coder89/ha-besmart
+
+Your existing BeSMART entry is migrated automatically: you do **not** need to
+remove it or enter your credentials again.
+
+1. **Make a Home Assistant backup** (the migration cannot be undone).
+2. In HACS, open *BeSMART* from coder89 → ⋮ → **Remove** (this removes only
+   the downloaded files, not your configuration). Do not delete the
+   integration from *Settings → Devices & services*.
+3. Add this repository in HACS (badge above), download **BeSMART** and
+   **restart** Home Assistant.
+4. On start, the entry is upgraded: credentials move to protected storage,
+   TLS verification is turned on and the default update interval (300 s) is
+   used. Check **Settings → Repairs** for any message.
+
+What you keep and what changes:
+
+- Thermostats (climate), water heater and the BeSMART device keep their
+  entity IDs, history, dashboards and automations (the displayed name may now
+  be prefixed with the device name).
+- coder89's **Thermostat Battery** percentage sensors are replaced by
+  **Thermostat Battery Status** (low / good). The old sensors become
+  unavailable: update dashboards/automations that use them, then delete them
+  from *Settings → Entities*.
+- New entities (temperatures, pressure, modulation, flame/circulator/DHW
+  binary sensors, buttons, technical data) are added.
+- Username and password are no longer in the integration **Options**: use
+  **Reconfigure** to change them.
+
+To go back to coder89's version, restore the backup made in step 1.
 
 ## Configuration
 
@@ -193,8 +224,9 @@ the UI never contain the original network error.
 
 ## Credits
 
-- [muchasuerte/ha-besmart](https://github.com/muchasuerte/ha-besmart) by
-  Andrea Nicotra — the original integration.
+- **Andrea Nicotra** ([muchasuerte/ha-besmart](https://github.com/muchasuerte/ha-besmart)) —
+  original author of the integration (2020), whose MIT copyright notice is
+  kept in [LICENSE](LICENSE).
 - [coder89/ha-besmart](https://github.com/coder89/ha-besmart) — config flow,
   water heater and battery sensor, base of this fork.
 - Everyone who reported issues and tested on their boilers.
