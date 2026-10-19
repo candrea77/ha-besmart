@@ -214,14 +214,11 @@ Riello BeSMART cloud (`api.besmart-home.com`), like the official app:
   supported), so they may end up in the access logs of Riello's servers: this
   is a residual risk we cannot remove. They always travel over HTTPS, with the
   server certificate verified by default;
-- your **user id** and **WiFi box id**, in every request, together with a
-  fixed token that is the same for every user (it is hardcoded in the
-  official app too);
+- your **user id** and **WiFi box id**, in every request, together with the
+  API token;
 - the commands you send (temperatures, modes).
 
-**Treat `user_id` and `wifi_box_id` as secrets.** The Riello cloud does not use
-a per-user token: whoever knows your user id and WiFi box id may be able to
-read and control your system. Never publish them.
+**Treat `user_id` and `wifi_box_id` as secrets.** Never publish them.
 
 **Where your credentials are stored.** In Home Assistant's config entry
 storage (`.storage/core.config_entries`, like every integration). They are not

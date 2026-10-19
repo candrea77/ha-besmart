@@ -74,10 +74,9 @@
   reconfigure, refresh).
 - TLS verification on by default; Repairs warnings when it is off or when
   the cloud certificate cannot be verified (credentials are not sent then).
-- The BeSMART cloud has no per-user token, so **user id and WiFi box id are
-  treated as secrets**: masked in all logs (also inside payloads), replaced
-  by `box_1`, `box_2`... in diagnostics, removed from device info and error
-  messages. The API token is redacted too. Thermostat and boiler ids are
+- **User id and WiFi box id are treated as secrets**: masked in all logs
+  (also inside payloads), replaced by `box_1`, `box_2`... in diagnostics,
+  removed from device info and error messages. The API token is redacted too. Thermostat and boiler ids are
   reduced to their last 4 characters in logs and diagnostics, and the
   weekly program is summarized ("7 days x 48 slots") instead of being
   logged in full on every update.

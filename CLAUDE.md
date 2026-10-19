@@ -22,7 +22,7 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    4 characters). Never log full URLs or the login payload.
    `diagnostics.py` must keep redacting `token`, `user_id`, `email` and the
    credentials, and pseudonymize wifi box ids (`box_1`...), also as dict keys.
-   The cloud has no per-user token: **user_id + wifi_box_id are credentials**.
+   **user_id + wifi_box_id are credentials**.
    Never show them in UI messages or device info (no `model_id`).
    Never chain cloud/aiohttp exceptions into Home Assistant exceptions
    (`ConfigEntryNotReady`, `UpdateFailed`, `HomeAssistantError`): HA shows

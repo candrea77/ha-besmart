@@ -9,10 +9,7 @@ body:
         Thanks for taking the time to report a bug!
 
         > [!WARNING]
-        > **Protect your account.** The BeSMART cloud has no per-user token:
-        > your **user_id** and **wifi_box_id**, together with a token that is
-        > the same for everybody, are enough to read and control your system.
-        > Before posting anything, remove your **password, e-mail/username,
+        > **Protect your account.** Before posting anything, remove your **password, e-mail/username,
         > token, user_id and wifi_box_id** (replace them with `***`).
         > Do not post screenshots of the BeSMART app account/device pages.
 
