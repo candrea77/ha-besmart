@@ -194,9 +194,3 @@ def test_italian_texts():
     assert it["sensor"]["battery_status"]["state"] == {"low": "Bassa", "good": "Buona", "unknown": "Sconosciuta"}
     assert it["climate"]["thermostat"]["name"] == "Termostato {room}"
 
-
-def test_manifest_categories():
-    manifest = _load("manifest.json")
-    assert manifest["categories"] == ["climate.thermostats_heating", "climate.water_heaters"]
-    keys = list(manifest)
-    assert keys[:2] == ["domain", "name"] and keys[2:] == sorted(keys[2:])

@@ -1,10 +1,6 @@
 {
   "domain": "besmart_thermostat",
   "name": "BeSMART",
-  "categories": [
-    "climate.thermostats_heating",
-    "climate.water_heaters"
-  ],
   "codeowners": [
     "@candrea77"
   ],

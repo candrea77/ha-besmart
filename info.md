@@ -18,7 +18,6 @@
 - Thermostat presets are not translated yet.
 
 ### Other
-- Manifest declares the HACS categories (thermostats/heating, water heaters).
 - No other behaviour changes.
 
 ## 0.7.0
