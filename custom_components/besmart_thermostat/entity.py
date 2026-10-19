@@ -20,7 +20,7 @@ from .coordinator import BesmartDataUpdateCoordinator
 def thermostat_setting_entities(coordinator: BesmartDataUpdateCoordinator, config_entry: ConfigEntry, classes):
     """One entity of each class per thermostat of a wifi box with a boiler."""
     return [
-        cls(coordinator, config_entry, device.wifi_box, thermostat.get("id"), thermostat.get("name"), device.device_info)
+        cls(coordinator, config_entry, device.wifi_box, thermostat.get("id"), thermostat.get("name"), device.thermostat_device_info(thermostat.get("id")))
         for device in coordinator.interface_devices
         if device.boiler is not None
         for thermostat in device.thermostats
@@ -46,7 +46,8 @@ class BesmartThermostatSettingEntity(CoordinatorEntity[BesmartDataUpdateCoordina
         # when the thermostat is renamed in the Riello app.
         self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_{self.FIELD}"
         self._attr_device_info = device_info
-        self._attr_translation_placeholders = {"room": str(room_name)}
+        # PATCH 0.8 (b2): no {room} in the name: the device (named
+        # after the room) already prefixes it.
 
     @property
     def _value(self) -> float | None:

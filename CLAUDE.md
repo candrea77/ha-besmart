@@ -71,10 +71,14 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
 
 ## Conventions
 
-- Every entity is named via `_attr_translation_key` (room names through
-  `translation_placeholders`), never a fixed `_attr_name`. Keep
+- Every entity is named via `_attr_translation_key`, never a fixed
+  `_attr_name`. Since 0.8.0 each thermostat has its own device named after
+  the room (identifier `<entry_id>:<thermostat id>`, `via_device` = WiFi
+  box): thermostat entity names carry no `{room}`, the device name prefixes
+  them. Keep
   `strings.json`, `translations/en.json` and `translations/it.json` in sync
-  (same keys; `strings.json` == `en.json`). English names must not change:
+  (same keys; `strings.json` == `en.json`). English names must not change
+  without the maintainer's approval (0.8.0: thermostat device names):
   they generate the entity_ids of new English installs. Translation keys are
   lowercase, so values like the uppercase presets are not translated yet.
 - Comments mark changes with `PATCH x.y:`, matching the existing code.

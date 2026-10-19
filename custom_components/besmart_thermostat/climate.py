@@ -52,7 +52,7 @@ async def async_setup_entry(
             room_id = thermostat.get("id")
             room_name = thermostat.get("name")
             new_entities.append(
-                Thermostat(coordinator, config_entry, wifi_box, room_id, room_name, device.device_info)
+                Thermostat(coordinator, config_entry, wifi_box, room_id, room_name, device.thermostat_device_info(room_id))
             )
 
     if new_entities:
@@ -144,7 +144,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         self._setpoint_OT = 0.0
         self._holiday_end_time = None
 
-        # link to BeSMART device
+        # link to the thermostat device (PATCH 0.8 (b2): was the WiFi box)
         self._attr_device_info = device_info
 
         # unique_id = <deviceID>:<roomID>
@@ -157,7 +157,8 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         # PATCH 0.7.1: translated name "{room} Thermostat" (same English
         # name as before, so the entity_id of new English installs is
         # unchanged).
-        self._attr_translation_placeholders = {"room": str(self._room_name)}
+        # PATCH 0.8 (b2): no {room} in the name: the device (named
+        # after the room) already prefixes it.
 
         # Disable backwards compatibility for new turn_on/off methods
         self._enable_turn_on_off_backwards_compatibility = False

@@ -118,7 +118,7 @@
         },
         "climate": {
             "thermostat": {
-                "name": "Termostato {room}",
+                "name": "Termostato",
                 "state_attributes": {
                     "mode": {
                         "name": "Modalità BeSMART"
@@ -143,23 +143,23 @@
         },
         "number": {
             "max_heating_set_point": {
-                "name": "Temperatura mandata massima {room}"
+                "name": "Mandata massima"
             },
             "min_heating_set_point": {
-                "name": "Temperatura mandata minima {room}"
+                "name": "Mandata minima"
             },
             "sensor_influence": {
-                "name": "Influenza sensore ambiente {room}"
+                "name": "Influenza sensore ambiente"
             }
         },
         "select": {
             "climatic_curve": {
-                "name": "Curva climatica {room}"
+                "name": "Curva climatica"
             }
         },
         "sensor": {
             "battery_status": {
-                "name": "Stato batteria termostato {room}",
+                "name": "Stato batteria termostato",
                 "state": {
                     "low": "Bassa",
                     "good": "Buona",
@@ -167,7 +167,7 @@
                 }
             },
             "room_temperature": {
-                "name": "Temperatura {room}"
+                "name": "Temperatura"
             },
             "system_pressure": {
                 "name": "Pressione impianto caldaia"

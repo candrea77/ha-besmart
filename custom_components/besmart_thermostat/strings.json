@@ -118,7 +118,7 @@
         },
         "climate": {
             "thermostat": {
-                "name": "{room} Thermostat",
+                "name": "Thermostat",
                 "state_attributes": {
                     "mode": {
                         "name": "BeSMART mode"
@@ -143,23 +143,23 @@
         },
         "number": {
             "max_heating_set_point": {
-                "name": "{room} Max Flow Temperature"
+                "name": "Max Flow Temperature"
             },
             "min_heating_set_point": {
-                "name": "{room} Min Flow Temperature"
+                "name": "Min Flow Temperature"
             },
             "sensor_influence": {
-                "name": "{room} Room Sensor Influence"
+                "name": "Room Sensor Influence"
             }
         },
         "select": {
             "climatic_curve": {
-                "name": "{room} Climatic Curve"
+                "name": "Climatic Curve"
             }
         },
         "sensor": {
             "battery_status": {
-                "name": "{room} Thermostat Battery Status",
+                "name": "Thermostat Battery Status",
                 "state": {
                     "low": "Low",
                     "good": "Good",
@@ -167,7 +167,7 @@
                 }
             },
             "room_temperature": {
-                "name": "{room} Temperature"
+                "name": "Temperature"
             },
             "system_pressure": {
                 "name": "Boiler System Pressure"

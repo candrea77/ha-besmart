@@ -100,17 +100,33 @@ To go back to coder89's version, restore the backup made in step 1.
 
 ## Entities
 
-One **BeSMART WiFi box** device is created per account, with:
+Devices (since 0.8.0):
+
+- one **BeSMART WiFi box** device per account, with the boiler and DHW
+  entities and the buttons;
+- one device **per thermostat**, named after the room (e.g. *Living*) and
+  linked to the WiFi box device, with the thermostat entities. Assign each
+  one to its area in Home Assistant.
+
+Entity names below are shown as *device name + entity name* (e.g. *Living
+Thermostat*, *Casa Water Heater*).
+
+**Thermostat device** (*&lt;Room&gt;*):
 
 | Entity | Type | Notes |
 |---|---|---|
-| *&lt;Room&gt;* Thermostat | climate | One per thermostat. |
-| *&lt;Room&gt;* Temperature | sensor | Temperature measured by the thermostat. |
-| *&lt;Room&gt;* Thermostat Battery Status | sensor (diagnostic) | low / good / unknown. |
-| *&lt;Room&gt;* Climatic Curve | select (configuration) | 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0. See [Thermostat settings](#thermostat-settings). |
-| *&lt;Room&gt;* Max Flow Temperature | number (configuration) | 15–80 °C, step 1. |
-| *&lt;Room&gt;* Min Flow Temperature | number (configuration) | 10–75 °C, step 1, never above the maximum. |
-| *&lt;Room&gt;* Room Sensor Influence | number (configuration) | 0–20, step 1. |
+| Thermostat | climate | One per thermostat. |
+| Temperature | sensor | Temperature measured by the thermostat. |
+| Thermostat Battery Status | sensor (diagnostic) | low / good / unknown. |
+| Climatic Curve | select (configuration) | 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0. See [Thermostat settings](#thermostat-settings). |
+| Max Flow Temperature | number (configuration) | 15–80 °C, step 1, never below the current minimum. |
+| Min Flow Temperature | number (configuration) | 10–75 °C, step 1, never above the current maximum. |
+| Room Sensor Influence | number (configuration) | 0–20, step 1. |
+
+**WiFi box device**:
+
+| Entity | Type | Notes |
+|---|---|---|
 | Water Heater | water_heater | DHW target 30–60 °C (whole degrees), work mode. |
 | Boiler System Pressure | sensor | bar. |
 | Boiler Water Temperature | sensor | Central heating flow temperature. |
@@ -141,8 +157,10 @@ They work like the settings page of the official app:
   them all back, changing only the selected one. Nothing is sent if the
   cloud returns partial data (try again a few minutes later);
 - the minimum flow temperature can never be set above the maximum (or the
-  maximum below the minimum): the change is refused, change the other value
-  first;
+  maximum below the minimum): the limits of the two boxes follow the current
+  values, and a change that would cross them is refused (change the other
+  value first). After a refused value the box may keep showing it until the
+  page is reloaded (Home Assistant frontend);
 - after sending, the value is read back. While the cloud is still passing
   the command to the boiler the new value can take a few minutes to show;
   if the cloud reports a different value an error is shown.
@@ -157,7 +175,8 @@ The values are read with the normal thermostat data: no extra requests.
 | Italian | ✅ | ✅ (since 0.7.1) |
 
 Entity names follow the Home Assistant language. Names are shown in the
-table above in English; in Italian they become e.g. *Termostato &lt;Stanza&gt;*,
+table above in English; in Italian they become e.g. *&lt;Stanza&gt; Termostato*,
+*&lt;Stanza&gt; Curva climatica*, *&lt;Stanza&gt; Mandata massima*,
 *Acqua calda sanitaria*, *Modulazione caldaia*, *Fiamma caldaia* (Accesa /
 Spenta), *Prelievo ACS* (In corso / Nessun prelievo). Thermostat presets
 (AUTO, MANUAL, ECO, PARTY, IDLE) are not translated yet.

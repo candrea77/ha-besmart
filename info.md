@@ -2,6 +2,21 @@
 
 ## 0.8.0
 
+### ⚠️ New devices: one per thermostat
+- Each thermostat now has its **own device**, named after the room and
+  linked to the BeSMART WiFi box device. The thermostat, its temperature,
+  battery status and settings move there; boiler, water heater, buttons and
+  technical data stay on the WiFi box device.
+- **Entity ids, unique ids and entity-based automations do not change.**
+- **Automations, scripts and scenes that use a *device* trigger, condition
+  or action on a thermostat must be linked again** to the new thermostat
+  device.
+- Assign each new thermostat device to its **area** (Settings → Devices).
+- Displayed names become *&lt;room&gt; &lt;entity&gt;*, e.g. "Living
+  Thermostat" (was "Casa Living Thermostat"), "Living Termostato" in
+  Italian. Names you set yourself are kept. New installations get entity ids
+  such as `climate.living_thermostat`.
+
 ### New features
 - **Thermostat settings**, for each thermostat (configuration entities):
   **Climatic Curve** (select: 0.2–3.0, the values of the official app),
@@ -12,6 +27,8 @@
 - ⚠️ **These are installer parameters that change the boiler flow
   temperature: write down the current values before changing them.**
 - Unavailable while the boiler is offline, like in the official app.
+- The limits of Max/Min Flow Temperature follow each other: the minimum can
+  never go above the current maximum and vice versa.
 - Every change reads the current settings first, changes only the selected
   value and sends nothing if the cloud data is partial or out of range. A
   minimum above the maximum is refused. The new value is read back and an

@@ -396,13 +396,23 @@ async def test_options_flow_has_no_credentials(hass, cloud):
 # ------------------------------------------------- M1 device + diagnostics
 
 
+def _box_device(hass, entry):
+    return next(
+        d for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+        if (DOMAIN, entry.entry_id) in d.identifiers
+    )
+
+
 async def test_device_has_no_wifi_box_model_id(hass, cloud):
     entry = v2_entry()
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
-    (device,) = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    device = _box_device(hass, entry)
     assert device.model == "BeSMART WiFi box"
     assert device.model_id is None
+    # PATCH 0.8 (b2): thermostat devices do not show the thermostat id either.
+    for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id):
+        assert device.model_id is None and device.serial_number is None
 
 
 async def test_device_model_id_from_old_version_is_cleared(hass, cloud):
@@ -415,7 +425,7 @@ async def test_device_model_id_from_old_version_is_cleared(hass, cloud):
         model_id=WIFI_BOX,
     )
     assert await hass.config_entries.async_setup(entry.entry_id)
-    (device,) = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    device = _box_device(hass, entry)
     assert device.model_id is None
 
 

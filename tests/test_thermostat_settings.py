@@ -362,14 +362,14 @@ async def setup_entry(hass, modes=("heat",)):
 
 async def test_entities_show_the_polled_values(hass, settings_cloud):
     await setup_entry(hass)
-    assert hass.states.get("select.casa_living_climatic_curve").state == "0.6"
-    assert hass.states.get("number.casa_living_max_flow_temperature").state == "45.0"
-    assert hass.states.get("number.casa_living_min_flow_temperature").state == "24.0"
-    assert hass.states.get("number.casa_living_room_sensor_influence").state == "10.0"
-    max_state = hass.states.get("number.casa_living_max_flow_temperature")
+    assert hass.states.get("select.living_climatic_curve").state == "0.6"
+    assert hass.states.get("number.living_max_flow_temperature").state == "45.0"
+    assert hass.states.get("number.living_min_flow_temperature").state == "24.0"
+    assert hass.states.get("number.living_room_sensor_influence").state == "10.0"
+    max_state = hass.states.get("number.living_max_flow_temperature")
     # b2: dynamic lower limit = current minimum (24).
     assert (max_state.attributes["min"], max_state.attributes["max"], max_state.attributes["step"]) == (24, 80, 1)
-    assert hass.states.get("select.casa_living_climatic_curve").attributes["options"] == [
+    assert hass.states.get("select.living_climatic_curve").attributes["options"] == [
         "0.2", "0.4", "0.6", "0.8", "1.0", "1.2", "1.5", "2.0", "2.5", "3.0"]
 
 
@@ -378,7 +378,7 @@ async def test_set_number_writes_and_verifies(hass, settings_cloud, caplog):
     settings_cloud.set_route("thermostats/setting", [settings(), settings(max_heating_set_point="60")])
     await hass.services.async_call(
         "number", "set_value",
-        {"entity_id": "number.casa_living_max_flow_temperature", "value": 60}, blocking=True,
+        {"entity_id": "number.living_max_flow_temperature", "value": 60}, blocking=True,
     )
     (_, form), = settings_cloud.puts
     assert form["max_heating_set_point"] == "60"
@@ -391,7 +391,7 @@ async def test_select_option_writes(hass, settings_cloud):
     settings_cloud.set_route("thermostats/setting", [settings(), settings(climatic_curve="1.5")])
     await hass.services.async_call(
         "select", "select_option",
-        {"entity_id": "select.casa_living_climatic_curve", "option": "1.5"}, blocking=True,
+        {"entity_id": "select.living_climatic_curve", "option": "1.5"}, blocking=True,
     )
     (_, form), = settings_cloud.puts
     assert form["climatic_curve"] == "1.5" and form["sensor_influence"] == "10"
@@ -413,8 +413,8 @@ async def test_dynamic_limits(hass, settings_cloud, min_value, max_value, min_li
     route["message"].update(min_heating_set_point=min_value, max_heating_set_point=max_value)
     settings_cloud.set_route("Thermostats/data", route)
     await setup_entry(hass)
-    min_state = hass.states.get("number.casa_living_min_flow_temperature")
-    max_state = hass.states.get("number.casa_living_max_flow_temperature")
+    min_state = hass.states.get("number.living_min_flow_temperature")
+    max_state = hass.states.get("number.living_max_flow_temperature")
     assert (min_state.attributes["min"], min_state.attributes["max"]) == min_limits
     assert (max_state.attributes["min"], max_state.attributes["max"]) == max_limits
 
@@ -426,8 +426,8 @@ async def test_dynamic_limits_follow_the_coordinator(hass, settings_cloud):
     settings_cloud.set_route("Thermostats/data", route)
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get("number.casa_living_min_flow_temperature").attributes["max"] == 55
-    assert hass.states.get("number.casa_living_max_flow_temperature").attributes["min"] == 30
+    assert hass.states.get("number.living_min_flow_temperature").attributes["max"] == 55
+    assert hass.states.get("number.living_max_flow_temperature").attributes["min"] == 30
 
 
 async def test_min_above_max_is_refused_without_put(hass, settings_cloud):
@@ -436,7 +436,7 @@ async def test_min_above_max_is_refused_without_put(hass, settings_cloud):
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             "number", "set_value",
-            {"entity_id": "number.casa_living_min_flow_temperature", "value": 50}, blocking=True,
+            {"entity_id": "number.living_min_flow_temperature", "value": 50}, blocking=True,
         )
     assert settings_cloud.puts == []
 
@@ -448,7 +448,7 @@ async def test_min_above_max_still_validated_in_code(hass, settings_cloud):
     with pytest.raises(ServiceValidationError) as err:
         await hass.services.async_call(
             "number", "set_value",
-            {"entity_id": "number.casa_living_min_flow_temperature", "value": 40}, blocking=True,
+            {"entity_id": "number.living_min_flow_temperature", "value": 40}, blocking=True,
         )
     assert str(err.value) == (
         "The minimum flow temperature (40 °C) cannot be higher than the maximum flow "
@@ -456,7 +456,7 @@ async def test_min_above_max_still_validated_in_code(hass, settings_cloud):
     )  # Home Assistant drops the final period
     assert settings_cloud.puts == []
     # The real value is written back to the state machine.
-    assert hass.states.get("number.casa_living_min_flow_temperature").state == "24.0"
+    assert hass.states.get("number.living_min_flow_temperature").state == "24.0"
 
 
 async def test_settings_logs_carry_the_masked_thermostat_id(make_client, caplog):
@@ -477,7 +477,7 @@ async def test_unconfirmed_write_shows_an_error(hass, settings_cloud):
     with pytest.raises(HomeAssistantError) as err:
         await hass.services.async_call(
             "number", "set_value",
-            {"entity_id": "number.casa_living_room_sensor_influence", "value": 5}, blocking=True,
+            {"entity_id": "number.living_room_sensor_influence", "value": 5}, blocking=True,
         )
     assert "did not confirm the new settings of thermostat Living" in str(err.value)
     assert len(settings_cloud.puts) == 1
@@ -490,19 +490,19 @@ async def test_unavailable_when_the_boiler_is_offline(hass, settings_cloud, boil
     settings_cloud.set_route("Thermostats/data", route)
     entry = await setup_entry(hass)
     for entity_id in (
-        "select.casa_living_climatic_curve",
-        "number.casa_living_max_flow_temperature",
-        "number.casa_living_min_flow_temperature",
-        "number.casa_living_room_sensor_influence",
+        "select.living_climatic_curve",
+        "number.living_max_flow_temperature",
+        "number.living_min_flow_temperature",
+        "number.living_room_sensor_influence",
     ):
         assert hass.states.get(entity_id).state == STATE_UNAVAILABLE, entity_id
     # The climate entity is not affected.
-    assert hass.states.get("climate.casa_living_thermostat").state != STATE_UNAVAILABLE
+    assert hass.states.get("climate.living_thermostat").state != STATE_UNAVAILABLE
 
     # A direct write is refused as well (HA skips unavailable entities).
     entity = next(
         e for e in hass.data["entity_components"]["number"].entities
-        if e.entity_id == "number.casa_living_max_flow_temperature"
+        if e.entity_id == "number.living_max_flow_temperature"
     )
     with pytest.raises(HomeAssistantError) as err:
         await entity.async_set_native_value(60)
@@ -516,7 +516,7 @@ async def test_season_change_uses_the_same_write_path(hass, settings_cloud):
     settings_cloud.set_route("thermostats/setting", [settings(), settings(season="0")])
     await hass.services.async_call(
         "climate", "set_hvac_mode",
-        {"entity_id": "climate.casa_living_thermostat", "hvac_mode": "cool"}, blocking=True,
+        {"entity_id": "climate.living_thermostat", "hvac_mode": "cool"}, blocking=True,
     )
     (_, form), = settings_cloud.puts
     assert form["season"] == "0" and form["max_heating_set_point"] == "45.0"
