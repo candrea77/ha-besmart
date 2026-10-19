@@ -818,9 +818,13 @@ class BesmartClient:
         # PATCH 0.7 (b5/b6): partial cloud reads report the set points and
         # the climatic curve as 0 (with cmd_stand_status "1"): never write
         # those back. Limits are the official app's (see valid_* helpers).
+        # PATCH 0.8: cmd_stand_status "1" alone does not block a write: it
+        # only means the cloud is still passing a previous command to the
+        # boiler (it stays "1" for ~30 s after a write), and blocking would
+        # prevent restoring a value right away. Only a partial read (zeros,
+        # missing or out-of-range fields) does.
         if (
-            str(settings.get("cmd_stand_status", "")).strip() == "1"
-            or not valid_heating_set_points(
+            not valid_heating_set_points(
                 settings.get("min_heating_set_point"), settings.get("max_heating_set_point")
             )
             or not valid_climatic_curve(settings.get("climatic_curve"))

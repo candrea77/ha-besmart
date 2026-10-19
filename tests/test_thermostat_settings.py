@@ -92,7 +92,6 @@ async def test_payload_matches_the_app(make_client, field, value, sent):
         # partial read: zeros with cmd_stand_status "1"
         {**{k: "0.0" for k in ("min_heating_set_point", "max_heating_set_point", "climatic_curve")},
          "sensor_influence": "0", "cmd_stand_status": "1"},
-        {"cmd_stand_status": "1"},  # valid values, command still being synchronised
         {"max_heating_set_point": "0.0"},
         {"climatic_curve": None},
         {"unit": "7"},
@@ -106,6 +105,17 @@ async def test_partial_or_invalid_read_sends_nothing(make_client, caplog, overri
         await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5})
     assert err.value.translation_key == "settings_incomplete"
     assert client._session.puts == []
+
+
+async def test_complete_read_while_synchronising_is_written(make_client):
+    """0.8.0: cmd_stand_status "1" alone does not block the PUT."""
+    client = client_for(make_client, settings(cmd_stand_status="1"))
+    assert await client.writeThermostatSettings(WIFI_BOX, ROOM, {"max_heating_set_point": 50}) == {
+        "max_heating_set_point": "50"}
+    form = form_of(client)
+    assert form["max_heating_set_point"] == "50"
+    assert form["min_heating_set_point"] == "24.0" and form["climatic_curve"] == "0.6"
+    assert "cmd_stand_status" not in form
 
 
 async def test_failed_read_sends_nothing(make_client):
@@ -283,7 +293,8 @@ async def test_errors_are_translated_and_not_chained(make_coordinator, no_verify
     assert err.value.translation_key == "settings_write_failed"
     assert err.value.__cause__ is None
 
-    co = coordinator_with(make_coordinator, [settings(cmd_stand_status="1")])
+    partial = {k: "0.0" for k in ("min_heating_set_point", "max_heating_set_point", "climatic_curve")}
+    co = coordinator_with(make_coordinator, [settings(**partial, cmd_stand_status="1")])
     with pytest.raises(HomeAssistantError) as err:
         await set_settings(co, {"sensor_influence": 5})
     assert err.value.translation_key == "settings_incomplete"

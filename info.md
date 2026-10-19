@@ -18,26 +18,33 @@
   such as `climate.living_thermostat`.
 
 ### New features
-- **Thermostat settings**, for each thermostat (configuration entities):
-  **Climatic Curve** (select: 0.2–3.0, the values of the official app),
-  **Max Flow Temperature** (15–80 °C), **Min Flow Temperature** (10–75 °C)
-  and **Room Sensor Influence** (0–20). Italian names: *Curva climatica*,
-  *Temperatura mandata massima*, *Temperatura mandata minima*, *Influenza
-  sensore ambiente*.
+- **Thermostat settings**, on each thermostat device (configuration
+  entities): **Climatic Curve** (select: 0.2–3.0, the values of the official
+  app), **Max Flow Temperature** (15–80 °C), **Min Flow Temperature**
+  (10–75 °C) and **Room Sensor Influence** (0–20). Italian names: *Curva
+  climatica*, *Mandata massima*, *Mandata minima*, *Influenza sensore
+  ambiente*.
 - ⚠️ **These are installer parameters that change the boiler flow
   temperature: write down the current values before changing them.**
 - Unavailable while the boiler is offline, like in the official app.
 - The limits of Max/Min Flow Temperature follow each other: the minimum can
   never go above the current maximum and vice versa.
 - Every change reads the current settings first, changes only the selected
-  value and sends nothing if the cloud data is partial or out of range. A
-  minimum above the maximum is refused. The new value is read back and an
-  error is shown if the cloud does not confirm it.
+  value and sends all the others exactly as read. Nothing is sent if that
+  read is partial (set points at 0, missing or out-of-range values); a
+  complete read with `cmd_stand_status` "1" (the cloud still passing a
+  previous command to the boiler) does not block the change, so a value can
+  be restored right away. A minimum above the maximum is refused.
+- After sending, the value is read back: if it differs while the cloud is
+  still synchronising (`cmd_stand_status` "1") it updates in the next
+  cycles; otherwise it is read again twice, 3 s apart, and an error is
+  shown if the cloud does not confirm it.
 
 ### Other
 - The heat/cool season switch uses the same write path (one change at a
   time per thermostat, read-back check, translated error messages).
-- Existing entities, unique ids and entity ids are unchanged.
+- Debug logs of the thermostat settings show the masked thermostat id
+  (`***1234`).
 
 ## 0.7.1
 

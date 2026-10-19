@@ -155,7 +155,8 @@ They work like the settings page of the official app:
   are unavailable) and accept only the values the app allows;
 - every change reads the current settings from the cloud first and sends
   them all back, changing only the selected one. Nothing is sent if the
-  cloud returns partial data (try again a few minutes later);
+  cloud returns partial data (try again a few minutes later); a command
+  still being synchronised by the cloud does not block a new change;
 - the minimum flow temperature can never be set above the maximum (or the
   maximum below the minimum): the limits of the two boxes follow the current
   values, and a change that would cross them is refused (change the other
