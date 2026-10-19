@@ -15,11 +15,12 @@ from homeassistant.const import (
     CONF_NAME,
     UnitOfTemperature,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import BesmartValidationError
 from .coordinator import BesmartDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -234,6 +235,14 @@ class WaterHeater(
             ATTR_PREVIOUS_CLIMATE_ACTIVE: self._previous_climate_active,
         }
 
+    @staticmethod
+    async def _call(command):
+        """PATCH 0.7: run a write command; invalid input -> ServiceValidationError."""
+        try:
+            return await command
+        except BesmartValidationError as ex:
+            raise ServiceValidationError(str(ex)) from None
+
     async def async_turn_on(self):
         """Turn on the heater."""
         await self.async_set_operation_mode(self.STATE_GAS)
@@ -250,7 +259,7 @@ class WaterHeater(
         if temperature is None:
             return
 
-        ok = await self._cl.setBoilerTemp(self._wifi_box, temperature)
+        ok = await self._call(self._cl.setBoilerTemp(self._wifi_box, temperature))
         if not ok:
             raise HomeAssistantError("Failed to set DHW temperature on BeSMART cloud")
         await self.coordinator.async_request_refresh()
@@ -264,11 +273,11 @@ class WaterHeater(
             self._previous_climate_active = any(
                 x.get("mode") not in ("5", "4", 5, 4) for x in thermostats.values()
             )
-            ok = await self._cl.setBoilerMode(self._wifi_box, "2")
+            ok = await self._call(self._cl.setBoilerMode(self._wifi_box, "2"))
         elif self._previous_climate_active:
-            ok = await self._cl.setBoilerMode(self._wifi_box, "0")
+            ok = await self._call(self._cl.setBoilerMode(self._wifi_box, "0"))
         else:
-            ok = await self._cl.setBoilerMode(self._wifi_box, "1")
+            ok = await self._call(self._cl.setBoilerMode(self._wifi_box, "1"))
         if not ok:
             raise HomeAssistantError("Failed to set boiler mode on BeSMART cloud")
         _LOGGER.debug("Set operation mode=%s", str(mode))

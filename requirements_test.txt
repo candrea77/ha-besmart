@@ -1,0 +1,6 @@
+# Test dependencies for the "tests" CI job (Python 3.14).
+# pytest-homeassistant-custom-component pins the matching Home Assistant
+# (0.13.372 -> homeassistant 2026.10.1) and pytest, and provides the real
+# `hass` fixture used by the setup/flow tests. The minimum supported Home
+# Assistant (2026.7) is tested too: see the matrix in combined.yaml.
+pytest-homeassistant-custom-component==0.13.372

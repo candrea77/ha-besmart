@@ -6,13 +6,25 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug! Please fill in as much as possible.
+        Thanks for taking the time to report a bug!
+
+        > [!WARNING]
+        > **Protect your account.** The BeSMART cloud has no per-user token:
+        > your **user_id** and **wifi_box_id**, together with a token that is
+        > the same for everybody, are enough to read and control your system.
+        > Before posting anything, remove your **password, e-mail/username,
+        > token, user_id and wifi_box_id** (replace them with `***`).
+        > Do not post screenshots of the BeSMART app account/device pages.
+
+        The safest way to share data is the **diagnostics file**, which is
+        already redacted by the integration.
 
   - type: input
     id: ha_version
     attributes:
       label: Home Assistant version
-      placeholder: "e.g. 2026.6.1"
+      description: Settings → About.
+      placeholder: "e.g. 2026.10.1"
     validations:
       required: true
 
@@ -20,8 +32,17 @@ body:
     id: integration_version
     attributes:
       label: BeSMART integration version
-      description: Visible in HACS or in Settings -> Devices & Services -> BeSMART.
-      placeholder: "e.g. 0.5"
+      description: Visible in HACS or in Settings → Devices & services → BeSMART.
+      placeholder: "e.g. 0.7.0"
+    validations:
+      required: true
+
+  - type: input
+    id: boiler_model
+    attributes:
+      label: Boiler model
+      description: Brand and model of the boiler (and thermostat, if relevant).
+      placeholder: "e.g. Beretta Mynute X 30 C + BeSMART thermostat"
     validations:
       required: true
 
@@ -56,24 +77,27 @@ body:
       required: false
 
   - type: textarea
-    id: logs
+    id: diagnostics
     attributes:
-      label: Relevant log output
+      label: Diagnostics file (recommended)
       description: |
-        Settings -> System -> Logs, filter for "besmart". For more detail, enable debug logging first:
-        Settings -> Devices & Services -> BeSMART -> Enable debug logging, reproduce the issue, then disable it to download the log.
-        Credentials are automatically redacted by the integration, but double-check before pasting.
-      render: text
+        Settings → Devices & services → BeSMART → ⋮ → **Download diagnostics**,
+        then drag & drop the file here. Credentials are removed, the user id is
+        redacted and WiFi boxes appear as `box_1`, `box_2`...
     validations:
       required: false
 
   - type: textarea
-    id: diagnostics
+    id: logs
     attributes:
-      label: Diagnostics file
+      label: Relevant log output
       description: |
-        Settings -> Devices & Services -> BeSMART -> three-dot menu -> Download diagnostics.
-        The file is automatically redacted (no credentials). Drag & drop it here.
+        Settings → System → Logs, filter for "besmart". For more detail:
+        Settings → Devices & services → BeSMART → ⋮ → Enable debug logging,
+        reproduce the issue, then disable it to download the log.
+        The integration redacts secrets, but **check the text yourself** and
+        replace any password, e-mail, token, user_id or wifi_box_id with `***`.
+      render: text
     validations:
       required: false
 
@@ -82,6 +106,8 @@ body:
     attributes:
       label: Checks
       options:
+        - label: I have removed passwords, e-mail addresses, tokens, user_id and wifi_box_id from everything I posted.
+          required: true
         - label: I have updated to the latest version of the integration before reporting.
           required: true
         - label: I have checked that the BeSMART mobile app works correctly (the cloud service is up).

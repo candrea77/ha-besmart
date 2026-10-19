@@ -30,7 +30,10 @@ class BesmartInterfaceDevice:
             identifiers={device_id},
             manufacturer="Riello S.p.a.",
             name=entry.options[CONF_NAME],
-            model="BeSMART",
-            model_id=wifi_box,
+            # PATCH 0.7 (security): the wifi box id acts as a credential, so
+            # it is no longer shown as model_id (None also clears the value
+            # stored by older versions). It stays only as internal data.
+            model="BeSMART WiFi box",
+            model_id=None,
         )
         self.device_info = DeviceInfo(identifiers={device_id})
