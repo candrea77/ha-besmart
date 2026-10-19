@@ -1,5 +1,27 @@
 ## Changes as compared to your installed version:
 
+## 0.8.0
+
+### New features
+- **Thermostat settings**, for each thermostat (configuration entities):
+  **Climatic Curve** (select: 0.2–3.0, the values of the official app),
+  **Max Flow Temperature** (15–80 °C), **Min Flow Temperature** (10–75 °C)
+  and **Room Sensor Influence** (0–20). Italian names: *Curva climatica*,
+  *Temperatura mandata massima*, *Temperatura mandata minima*, *Influenza
+  sensore ambiente*.
+- ⚠️ **These are installer parameters that change the boiler flow
+  temperature: write down the current values before changing them.**
+- Unavailable while the boiler is offline, like in the official app.
+- Every change reads the current settings first, changes only the selected
+  value and sends nothing if the cloud data is partial or out of range. A
+  minimum above the maximum is refused. The new value is read back and an
+  error is shown if the cloud does not confirm it.
+
+### Other
+- The heat/cool season switch uses the same write path (one change at a
+  time per thermostat, read-back check, translated error messages).
+- Existing entities, unique ids and entity ids are unchanged.
+
 ## 0.7.1
 
 ### ⚠️ Italian users: displayed names change

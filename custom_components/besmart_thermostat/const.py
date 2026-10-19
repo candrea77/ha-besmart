@@ -14,6 +14,10 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     # PATCH 0.7: "Read technical data" and "Refresh now" buttons.
     Platform.BUTTON,
+    # PATCH 0.8: thermostat settings (climatic curve, flow temperatures,
+    # room sensor influence).
+    Platform.NUMBER,
+    Platform.SELECT,
 ]
 
 # --- Config / options keys -------------------------------------------------

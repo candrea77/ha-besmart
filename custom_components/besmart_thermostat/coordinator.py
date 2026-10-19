@@ -43,12 +43,18 @@ from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import (
     BesmartClient,
+    BesmartSettingsError,
+    BesmartValidationError,
     mask_id,
     parse_value,
     valid_climatic_curve,
@@ -88,7 +94,22 @@ MANUAL_REFRESH_COOLDOWN = 10
 # presses (each one sends up to 14 requests).
 TECHNICAL_READ_COOLDOWN = 30
 
+# PATCH 0.8: read-back of the thermostat settings after a write: extra reads
+# when the value differs and the cloud is not synchronising the command.
+SETTINGS_VERIFY_RETRIES = 2
+SETTINGS_VERIFY_DELAY = 3
+
 type BesmartData = dict[str, dict]
+
+
+def _same_setting(read, sent) -> bool:
+    """PATCH 0.8: "45.0" read back equals "45" sent."""
+    read_value, sent_value = parse_value(read), parse_value(sent)
+    return (
+        read_value is not None
+        and sent_value is not None
+        and abs(read_value - sent_value) < 1e-6
+    )
 
 
 def _resolve_interval(entry: ConfigEntry) -> timedelta:
@@ -123,6 +144,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         self._last_technical_read: dict[str, float] = {}
         # PATCH 0.7 (b5): last valid set points per (wifi_box, room_id).
         self._last_valid_setpoints: dict[tuple[str, str], dict] = {}
+        # PATCH 0.8: one lock per (wifi_box, room_id) for settings writes.
+        self._settings_locks: dict[tuple[str, str], asyncio.Lock] = {}
         # PATCH 0.7: "Refresh now" button state.
         self._manual_refresh_lock = asyncio.Lock()
         self._last_manual_refresh: float | None = None
@@ -285,6 +308,97 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
     def boiler_data(self, wifi_box: str) -> dict | None:
         """Return the latest boiler data dict for a wifi box, or None."""
         return (self.data or {}).get(wifi_box, {}).get("boiler")
+
+    def boiler_online(self, wifi_box: str, room_id: str) -> bool:
+        """PATCH 0.8: boiler.online == "1", like the official app.
+
+        Taken from the latest thermostat read (it embeds the boiler); the
+        Wifi_boxes/data read done at setup is the fallback.
+        """
+        boiler = (self.thermostat_data(wifi_box, room_id) or {}).get("boiler")
+        if not isinstance(boiler, dict):
+            boiler = next(
+                (d.boiler for d in self.interface_devices if d.wifi_box == wifi_box), None
+            )
+        return isinstance(boiler, dict) and str(boiler.get("online", "")).strip() == "1"
+
+    async def async_set_thermostat_settings(
+        self, wifi_box: str, room_id: str, room_name: str, changes: dict
+    ) -> None:
+        """PATCH 0.8: write thermostat settings, then verify them.
+
+        One write at a time per thermostat. Invalid values raise
+        ServiceValidationError, cloud problems HomeAssistantError (fixed,
+        translated messages; cloud exceptions are never chained).
+        """
+        placeholders = {"room": str(room_name)}
+        lock = self._settings_locks.setdefault((wifi_box, room_id), asyncio.Lock())
+        async with lock:
+            season = (self.thermostat_data(wifi_box, room_id) or {}).get("season")
+            try:
+                written = await self.client.writeThermostatSettings(
+                    wifi_box, room_id, changes, season=season
+                )
+            except BesmartValidationError as ex:
+                if ex.translation_key is None:
+                    raise ServiceValidationError(str(ex)) from None
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key=ex.translation_key,
+                    translation_placeholders={**placeholders, **ex.placeholders},
+                ) from None
+            except BesmartSettingsError as ex:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key=ex.translation_key,
+                    translation_placeholders=placeholders,
+                ) from None
+            await self._verify_thermostat_settings(wifi_box, room_id, written, placeholders)
+
+    async def _verify_thermostat_settings(
+        self, wifi_box: str, room_id: str, expected: dict, placeholders: dict
+    ) -> None:
+        """PATCH 0.8: read the settings back and compare the written fields.
+
+        Equal -> ok. Different while cmd_stand_status is "1" -> the cloud is
+        still synchronising the command: no error, the value updates in the
+        next cycles. Different otherwise -> up to SETTINGS_VERIFY_RETRIES
+        more reads, SETTINGS_VERIFY_DELAY s apart, then HomeAssistantError.
+        A season the read does not report is not checked.
+        """
+        mismatched: dict = {}
+        for attempt in range(1 + SETTINGS_VERIFY_RETRIES):
+            if attempt:
+                await asyncio.sleep(SETTINGS_VERIFY_DELAY)
+            settings = await self.client.thermostatSettings(wifi_box, room_id)
+            if not isinstance(settings, dict):
+                mismatched = {field: None for field in expected}
+                continue
+            mismatched = {
+                field: settings.get(field)
+                for field, value in expected.items()
+                if not (field == "season" and "season" not in settings)
+                and not _same_setting(settings.get(field), value)
+            }
+            if not mismatched:
+                return
+            if str(settings.get("cmd_stand_status", "")).strip() == "1":
+                _LOGGER.debug(
+                    "settings of thermostat %s being synchronised by the cloud: %s",
+                    mask_id(room_id),
+                    self.client._redact_payload({"sent": expected, "read": mismatched}),
+                )
+                return
+        _LOGGER.debug(
+            "settings of thermostat %s not confirmed by the cloud: %s",
+            mask_id(room_id),
+            self.client._redact_payload({"sent": expected, "read": mismatched}),
+        )
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="settings_not_confirmed",
+            translation_placeholders=placeholders,
+        )
 
     def modulation(self, wifi_box: str):
         """PATCH 0.7: return the latest raw modulation value, or None."""

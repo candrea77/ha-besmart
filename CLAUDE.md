@@ -10,7 +10,9 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    endpoints that read data. The existing write commands (`PUT` thermostat
    mode/temperature/settings, boiler work mode, DHW target temperature) stay as
    they are; do not add new write endpoints without explicit approval from the
-   maintainer.
+   maintainer. 0.8.0 (approved): `PUT Thermostats/setting` may also change
+   `climatic_curve`, `max/min_heating_set_point` and `sensor_influence`
+   (read-modify-write in `writeThermostatSettings()`), nothing else.
 2. **NEVER write to `Boilers/TSP`** (boiler technical/installer parameters) and
    **NEVER call `Boilers/reset`** — not in integration code, tests, scripts,
    or ad-hoc debugging. These can alter or lock out the boiler.
@@ -61,7 +63,8 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
 - `coordinator.py` — a single `DataUpdateCoordinator` per config entry fetches
   everything once per cycle (`asyncio.gather` per wifi box). Entities read only
   from `coordinator.data`; they never call the API while polling.
-- Platforms: `climate`, `water_heater`, `sensor`, `binary_sensor`, `button`.
+- Platforms: `climate`, `water_heater`, `sensor`, `binary_sensor`, `button`,
+  `number`, `select` (thermostat settings, base class in `entity.py`).
 - Cloud responses look like `{"error_code": .., "status": true, "message": {...}}`.
   Invalid values: empty, `None`, `"null"`, `"DNCON"`, strings containing
   `disable`. Use `api.parse_value()`; `"0.0"` is a valid 0, not unknown.

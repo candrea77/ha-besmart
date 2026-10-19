@@ -1,0 +1,460 @@
+"""0.8.0: thermostat settings (climatic curve, flow temperatures, sensor influence).
+
+PUT Thermostats/setting is a read-modify-write of the fresh settings read,
+with the same parameters as the official app; the value is verified after
+the write. Never hits the real cloud.
+"""
+
+import asyncio
+import json
+import logging
+
+import pytest
+from homeassistant.const import CONF_MODE, CONF_PASSWORD, CONF_USERNAME, STATE_UNAVAILABLE
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.besmart_thermostat import coordinator as coordinator_module
+from custom_components.besmart_thermostat.api import (
+    BesmartClient,
+    BesmartSettingsError,
+    BesmartValidationError,
+)
+from custom_components.besmart_thermostat.const import DOMAIN
+
+from .conftest import PASSWORD, USER_ID, USERNAME, WIFI_BOX
+from .test_setup_and_flows import OPTIONS, _custom_integrations, assert_no_secrets, cloud  # noqa: F401
+
+ROOM = "r1"
+WRITE_OK = {"error_code": 0, "status": True}
+SETTINGS = {
+    "unit": "0",
+    "season": "1",
+    "max_heating_set_point": "45.0",
+    "min_heating_set_point": "24.0",
+    "sensor_influence": "10",
+    "climatic_curve": "0.6",
+    "cmd_stand_status": "0",
+}
+# Parameters of the official app (ParamsMapUtils.getSettingsParams): base
+# parameters + unit, season and the four settings.
+APP_PARAMS = {
+    "user_id", "id", "wifi_box_id", "token", "thermostat_id",
+    "unit", "season", "max_heating_set_point", "min_heating_set_point",
+    "sensor_influence", "climatic_curve",
+}
+
+
+def settings(**override):
+    return {"status": True, "message": {**SETTINGS, **override}}
+
+
+def client_for(make_client, reads, write=WRITE_OK):
+    return make_client({"thermostats/setting": reads, "Thermostats/setting": write})
+
+
+def form_of(client):
+    (url, form), = client._session.puts
+    assert url.endswith("Android/Thermostats/setting")
+    return form
+
+
+# ------------------------------------------------------------------ api.py
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "sent"),
+    [
+        ("max_heating_set_point", 60.0, "60"),
+        ("min_heating_set_point", 30, "30"),
+        ("sensor_influence", 0.0, "0"),
+        ("climatic_curve", "1.5", "1.5"),
+        ("climatic_curve", 2, "2.0"),
+    ],
+)
+async def test_payload_matches_the_app(make_client, field, value, sent):
+    """Same parameter names as the app; other fields exactly as read."""
+    client = client_for(make_client, settings())
+    assert await client.writeThermostatSettings(WIFI_BOX, ROOM, {field: value}) == {field: sent}
+    form = form_of(client)
+    assert set(form) == APP_PARAMS
+    expected = {k: SETTINGS[k] for k in APP_PARAMS & set(SETTINGS)}
+    expected[field] = sent
+    assert {k: form[k] for k in expected} == expected
+    assert form["user_id"] == form["id"] == USER_ID
+    assert form["wifi_box_id"] == WIFI_BOX and form["thermostat_id"] == ROOM
+    assert form["token"] == BesmartClient.TOKEN
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        # partial read: zeros with cmd_stand_status "1"
+        {**{k: "0.0" for k in ("min_heating_set_point", "max_heating_set_point", "climatic_curve")},
+         "sensor_influence": "0", "cmd_stand_status": "1"},
+        {"cmd_stand_status": "1"},  # valid values, command still being synchronised
+        {"max_heating_set_point": "0.0"},
+        {"climatic_curve": None},
+        {"unit": "7"},
+        {"sensor_influence": "21"},  # existing field out of the app limits
+        {"min_heating_set_point": "40", "max_heating_set_point": "35"},
+    ],
+)
+async def test_partial_or_invalid_read_sends_nothing(make_client, caplog, override):
+    client = client_for(make_client, settings(**override))
+    with pytest.raises(BesmartSettingsError) as err:
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_incomplete"
+    assert client._session.puts == []
+
+
+async def test_failed_read_sends_nothing(make_client):
+    client = client_for(make_client, {"status": False, "error_code": 1})
+    with pytest.raises(BesmartSettingsError) as err:
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_read_failed"
+    assert client._session.puts == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_heating_set_point", 81),
+        ("max_heating_set_point", 14),
+        ("max_heating_set_point", 45.5),  # step 1
+        ("min_heating_set_point", 9),
+        ("min_heating_set_point", 76),
+        ("sensor_influence", 21),
+        ("sensor_influence", -1),
+        ("climatic_curve", "1.4"),
+        ("climatic_curve", "0"),
+        ("climatic_curve", "abc"),
+        ("max_heating_set_point", float("nan")),
+        ("max_heating_set_point", None),
+        ("unit", "1"),  # not a writable setting
+    ],
+)
+async def test_out_of_range_request_reads_and_sends_nothing(make_client, field, value):
+    client = client_for(make_client, settings())
+    with pytest.raises(BesmartValidationError):
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, {field: value})
+    assert client._session.calls == []
+
+
+@pytest.mark.parametrize(
+    ("change", "shown"),
+    [
+        ({"min_heating_set_point": 50}, {"min": "50", "max": "45"}),
+        ({"max_heating_set_point": 20}, {"min": "24", "max": "20"}),
+    ],
+)
+async def test_min_above_max_is_refused_not_corrected(make_client, change, shown):
+    client = client_for(make_client, settings())
+    with pytest.raises(BesmartValidationError) as err:
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, change)
+    assert err.value.translation_key == "min_above_max"
+    assert err.value.placeholders == shown
+    assert client._session.puts == []
+
+
+async def test_min_equal_max_is_accepted(make_client):
+    client = client_for(make_client, settings())
+    await client.writeThermostatSettings(WIFI_BOX, ROOM, {"min_heating_set_point": 45})
+    assert form_of(client)["min_heating_set_point"] == "45"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [{"status": False, "error_code": 0}, {"status": True, "error_code": 5}, {"status": False}],
+)
+async def test_cloud_rejection_is_an_error(make_client, response):
+    client = client_for(make_client, settings(), write=response)
+    with pytest.raises(BesmartSettingsError) as err:
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_write_failed"
+
+
+async def test_season_fallback_when_the_read_has_none(make_client):
+    reads = {"status": True, "message": {k: v for k, v in SETTINGS.items() if k != "season"}}
+    client = client_for(make_client, reads)
+    await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5}, season="0")
+    assert form_of(client)["season"] == "0"
+
+    client = client_for(make_client, reads)
+    with pytest.raises(BesmartSettingsError):
+        await client.writeThermostatSettings(WIFI_BOX, ROOM, {"sensor_influence": 5})
+    assert client._session.puts == []
+
+
+async def test_season_change_keeps_the_settings(make_client):
+    client = client_for(make_client, settings())
+    assert await client.setThermostatSeason(WIFI_BOX, ROOM, "0") is True
+    form = form_of(client)
+    assert form["season"] == "0"
+    assert {k: form[k] for k in ("max_heating_set_point", "min_heating_set_point",
+                                 "sensor_influence", "climatic_curve")} == {
+        "max_heating_set_point": "45.0", "min_heating_set_point": "24.0",
+        "sensor_influence": "10", "climatic_curve": "0.6"}
+
+
+# ---------------------------------------------------- coordinator: verify
+
+
+@pytest.fixture
+def no_verify_delay(monkeypatch):
+    monkeypatch.setattr(coordinator_module, "SETTINGS_VERIFY_DELAY", 0)
+
+
+def coordinator_with(make_coordinator, reads, write=WRITE_OK):
+    co = make_coordinator({"thermostats/setting": reads, "Thermostats/setting": write})
+    co.data = {WIFI_BOX: {"boiler": {}, "modulation": None, "thermostats": {
+        ROOM: {**SETTINGS, "boiler": {"online": "1"}}}}}
+    return co
+
+
+async def set_settings(co, changes):
+    await co.async_set_thermostat_settings(WIFI_BOX, ROOM, "Living", changes)
+
+
+def setting_reads(co):
+    return co.client._session.count("thermostats/setting")
+
+
+async def test_verified_value_is_ok(make_coordinator, no_verify_delay):
+    co = coordinator_with(make_coordinator, [settings(), settings(sensor_influence="5")])
+    await set_settings(co, {"sensor_influence": 5})
+    assert setting_reads(co) == 2  # fresh read + one read-back
+
+
+async def test_different_value_while_synchronising_is_not_an_error(
+    make_coordinator, no_verify_delay, caplog
+):
+    co = coordinator_with(make_coordinator, [settings(), settings(cmd_stand_status="1")])
+    with caplog.at_level(logging.DEBUG):
+        await set_settings(co, {"sensor_influence": 5})
+    assert setting_reads(co) == 2
+    assert "being synchronised" in caplog.text
+    assert_no_secrets(caplog.text)
+
+
+async def test_different_value_is_retried_then_ok(make_coordinator, no_verify_delay):
+    co = coordinator_with(
+        make_coordinator, [settings(), settings(), settings(), settings(sensor_influence="5.0")]
+    )
+    await set_settings(co, {"sensor_influence": 5})
+    assert setting_reads(co) == 4
+
+
+async def test_different_value_fails_after_two_retries(make_coordinator, monkeypatch, caplog):
+    delays = []
+
+    async def fake_sleep(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr(coordinator_module.asyncio, "sleep", fake_sleep)
+    co = coordinator_with(make_coordinator, [settings()])
+    with caplog.at_level(logging.DEBUG), pytest.raises(HomeAssistantError) as err:
+        await set_settings(co, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_not_confirmed"
+    assert err.value.__cause__ is None
+    assert setting_reads(co) == 1 + 3  # fresh read + read-back + 2 retries
+    assert [d for d in delays if d != 0.01] == [3, 3]  # 0.01: FakeSession
+    assert "not confirmed" in caplog.text
+    assert_no_secrets(caplog.text)
+
+
+async def test_failed_read_back_counts_as_a_mismatch(make_coordinator, no_verify_delay):
+    co = coordinator_with(make_coordinator, [settings(), {"status": False}])
+    with pytest.raises(HomeAssistantError) as err:
+        await set_settings(co, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_not_confirmed"
+
+
+async def test_errors_are_translated_and_not_chained(make_coordinator, no_verify_delay):
+    co = coordinator_with(make_coordinator, [settings()])
+    with pytest.raises(ServiceValidationError) as err:
+        await set_settings(co, {"min_heating_set_point": 50})
+    assert err.value.translation_key == "min_above_max"
+    assert err.value.translation_placeholders == {"room": "Living", "min": "50", "max": "45"}
+
+    co = coordinator_with(make_coordinator, [settings()], write={"status": False})
+    with pytest.raises(HomeAssistantError) as err:
+        await set_settings(co, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_write_failed"
+    assert err.value.__cause__ is None
+
+    co = coordinator_with(make_coordinator, [settings(cmd_stand_status="1")])
+    with pytest.raises(HomeAssistantError) as err:
+        await set_settings(co, {"sensor_influence": 5})
+    assert err.value.translation_key == "settings_incomplete"
+    assert co.client._session.puts == []
+
+
+async def test_one_write_at_a_time_per_thermostat(make_coordinator, no_verify_delay):
+    co = coordinator_with(make_coordinator, [settings()])
+    co.client._session.routes["thermostats/setting"] = [
+        settings(), settings(sensor_influence="5"), settings(sensor_influence="5"),
+        settings(sensor_influence="5", climatic_curve="1.0"),
+    ]
+    await asyncio.gather(
+        set_settings(co, {"sensor_influence": 5}),
+        set_settings(co, {"climatic_curve": "1.0"}),
+    )
+    sequence = ["PUT" if "Thermostats/setting" in url else "GET" for url in co.client._session.calls]
+    assert sequence == ["GET", "PUT", "GET", "GET", "PUT", "GET"]
+    # The second write starts from the value written by the first one.
+    assert co.client._session.puts[1][1]["sensor_influence"] == "5"
+
+
+@pytest.mark.parametrize(
+    ("thermostat_boiler", "topology_boiler", "online"),
+    [
+        ({"online": "1"}, {"id": 1}, True),
+        ({"online": "0"}, {"id": 1, "online": "1"}, False),
+        ({"online": 1}, {"id": 1}, True),
+        (None, {"id": 1, "online": "1"}, True),  # fallback: Wifi_boxes/data
+        (None, {"id": 1}, False),
+        (None, None, False),
+    ],
+)
+def test_boiler_online(make_coordinator, thermostat_boiler, topology_boiler, online):
+    co = make_coordinator({})
+    co.interface_devices[0].boiler = topology_boiler
+    data = dict(SETTINGS)
+    if thermostat_boiler is not None:
+        data["boiler"] = thermostat_boiler
+    co.data = {WIFI_BOX: {"boiler": {}, "thermostats": {ROOM: data}}}
+    assert co.boiler_online(WIFI_BOX, ROOM) is online
+
+
+# --------------------------------------------------------- Home Assistant
+
+
+@pytest.fixture
+def settings_cloud(cloud, monkeypatch):
+    monkeypatch.setattr(coordinator_module, "SETTINGS_VERIFY_DELAY", 0)
+    cloud.set_route(
+        "Thermostats/data",
+        {"status": True, "message": {
+            "mode": "1", "season": "1", "current_temp": "20.5", "unit": "0",
+            **{k: v for k, v in SETTINGS.items() if k not in ("unit", "season")},
+            "boiler": {"online": "1"},
+        }},
+    )
+    cloud.set_route("thermostats/setting", settings())
+    cloud.set_route("Thermostats/setting", WRITE_OK)
+    return cloud
+
+
+async def setup_entry(hass, modes=("heat",)):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        title="Casa",
+        data={CONF_USERNAME: USERNAME, CONF_PASSWORD: PASSWORD},
+        options={**OPTIONS, CONF_MODE: list(modes)},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_entities_show_the_polled_values(hass, settings_cloud):
+    await setup_entry(hass)
+    assert hass.states.get("select.casa_living_climatic_curve").state == "0.6"
+    assert hass.states.get("number.casa_living_max_flow_temperature").state == "45.0"
+    assert hass.states.get("number.casa_living_min_flow_temperature").state == "24.0"
+    assert hass.states.get("number.casa_living_room_sensor_influence").state == "10.0"
+    max_state = hass.states.get("number.casa_living_max_flow_temperature")
+    assert (max_state.attributes["min"], max_state.attributes["max"], max_state.attributes["step"]) == (15, 80, 1)
+    assert hass.states.get("select.casa_living_climatic_curve").attributes["options"] == [
+        "0.2", "0.4", "0.6", "0.8", "1.0", "1.2", "1.5", "2.0", "2.5", "3.0"]
+
+
+async def test_set_number_writes_and_verifies(hass, settings_cloud, caplog):
+    await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(max_heating_set_point="60")])
+    await hass.services.async_call(
+        "number", "set_value",
+        {"entity_id": "number.casa_living_max_flow_temperature", "value": 60}, blocking=True,
+    )
+    (_, form), = settings_cloud.puts
+    assert form["max_heating_set_point"] == "60"
+    assert form["min_heating_set_point"] == "24.0" and form["climatic_curve"] == "0.6"
+    assert_no_secrets(caplog.text)
+
+
+async def test_select_option_writes(hass, settings_cloud):
+    await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(climatic_curve="1.5")])
+    await hass.services.async_call(
+        "select", "select_option",
+        {"entity_id": "select.casa_living_climatic_curve", "option": "1.5"}, blocking=True,
+    )
+    (_, form), = settings_cloud.puts
+    assert form["climatic_curve"] == "1.5" and form["sensor_influence"] == "10"
+
+
+async def test_min_above_max_shows_a_clear_error(hass, settings_cloud):
+    await setup_entry(hass)
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": "number.casa_living_min_flow_temperature", "value": 50}, blocking=True,
+        )
+    assert str(err.value) == (
+        "The minimum flow temperature (50 °C) cannot be higher than the maximum flow "
+        "temperature (45 °C) of thermostat Living. Change the other value first"
+    )  # Home Assistant drops the final period
+    assert settings_cloud.puts == []
+
+
+async def test_unconfirmed_write_shows_an_error(hass, settings_cloud):
+    await setup_entry(hass)
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": "number.casa_living_room_sensor_influence", "value": 5}, blocking=True,
+        )
+    assert "did not confirm the new settings of thermostat Living" in str(err.value)
+    assert len(settings_cloud.puts) == 1
+
+
+@pytest.mark.parametrize("boiler", [{"online": "0"}, {}])
+async def test_unavailable_when_the_boiler_is_offline(hass, settings_cloud, boiler):
+    route = json.loads(json.dumps(settings_cloud.routes["Thermostats/data"]))
+    route["message"]["boiler"] = boiler
+    settings_cloud.set_route("Thermostats/data", route)
+    entry = await setup_entry(hass)
+    for entity_id in (
+        "select.casa_living_climatic_curve",
+        "number.casa_living_max_flow_temperature",
+        "number.casa_living_min_flow_temperature",
+        "number.casa_living_room_sensor_influence",
+    ):
+        assert hass.states.get(entity_id).state == STATE_UNAVAILABLE, entity_id
+    # The climate entity is not affected.
+    assert hass.states.get("climate.casa_living_thermostat").state != STATE_UNAVAILABLE
+
+    # A direct write is refused as well (HA skips unavailable entities).
+    entity = next(
+        e for e in hass.data["entity_components"]["number"].entities
+        if e.entity_id == "number.casa_living_max_flow_temperature"
+    )
+    with pytest.raises(HomeAssistantError) as err:
+        await entity.async_set_native_value(60)
+    assert err.value.translation_key == "boiler_offline"
+    assert settings_cloud.puts == []
+    assert entry.runtime_data is not None
+
+
+async def test_season_change_uses_the_same_write_path(hass, settings_cloud):
+    await setup_entry(hass, modes=("heat", "cool"))
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(season="0")])
+    await hass.services.async_call(
+        "climate", "set_hvac_mode",
+        {"entity_id": "climate.casa_living_thermostat", "hvac_mode": "cool"}, blocking=True,
+    )
+    (_, form), = settings_cloud.puts
+    assert form["season"] == "0" and form["max_heating_set_point"] == "45.0"

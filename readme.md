@@ -11,6 +11,8 @@ through the BeSMART cloud — the same service used by the official app.
 
 - Control of every BeSMART thermostat: target temperature, presets
   (Auto, Manual, Eco, Party, Off/anti-freeze), heating/cooling season.
+- **Thermostat settings** (installer parameters): climatic curve, maximum
+  and minimum flow temperature, room sensor influence.
 - Domestic hot water (DHW): target temperature and boiler work mode.
 - Boiler monitoring: pressure, flow (water) temperature, outdoor probe,
   **burner modulation (%)**, flame / circulator / DHW-tap states.
@@ -105,6 +107,10 @@ One **BeSMART WiFi box** device is created per account, with:
 | *&lt;Room&gt;* Thermostat | climate | One per thermostat. |
 | *&lt;Room&gt;* Temperature | sensor | Temperature measured by the thermostat. |
 | *&lt;Room&gt;* Thermostat Battery Status | sensor (diagnostic) | low / good / unknown. |
+| *&lt;Room&gt;* Climatic Curve | select (configuration) | 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0. See [Thermostat settings](#thermostat-settings). |
+| *&lt;Room&gt;* Max Flow Temperature | number (configuration) | 15–80 °C, step 1. |
+| *&lt;Room&gt;* Min Flow Temperature | number (configuration) | 10–75 °C, step 1, never above the maximum. |
+| *&lt;Room&gt;* Room Sensor Influence | number (configuration) | 0–20, step 1. |
 | Water Heater | water_heater | DHW target 30–60 °C (whole degrees), work mode. |
 | Boiler System Pressure | sensor | bar. |
 | Boiler Water Temperature | sensor | Central heating flow temperature. |
@@ -115,7 +121,33 @@ One **BeSMART WiFi box** device is created per account, with:
 | **Read technical data** (*Leggi dati tecnici*) | button (diagnostic) | Reads the boiler technical values once (never polled). 30 s cooldown. |
 | Technical data (*Dati tecnici*) | sensor (diagnostic) | State = time of the last reading; attributes: `modulation_pct`, `pressure_bar`, `flow_temperature`, `return_temperature`, `flue_temperature`, `dhw_temperature`, `dhw_set_point`, `heating_set_point`, `dhw_flow_rate`, `flame`, `outdoor_temperature`, `high_condensation_hours` (operating hours in high-condensation mode), `heating_hours` (operating hours in heating), `dhw_hours` (operating hours in DHW), `temperature_unit`, `unsupported_endpoints`. Restored after a restart. |
 
-Boiler entities are created only when the WiFi box reports a boiler.
+Boiler entities and thermostat settings are created only when the WiFi box
+reports a boiler.
+
+### Thermostat settings
+
+> ⚠️ **These are installer parameters.** They change the flow temperature
+> the boiler produces for that thermostat (climatic curve, maximum and
+> minimum flow temperature, influence of the room sensor). A wrong value can
+> make rooms too cold or too hot, or exceed what the heating system (e.g.
+> underfloor heating) can take. **Write down the current values before
+> changing them**, and if unsure ask your installer.
+
+They work like the settings page of the official app:
+
+- they are shown only while the boiler is **online** (otherwise the entities
+  are unavailable) and accept only the values the app allows;
+- every change reads the current settings from the cloud first and sends
+  them all back, changing only the selected one. Nothing is sent if the
+  cloud returns partial data (try again a few minutes later);
+- the minimum flow temperature can never be set above the maximum (or the
+  maximum below the minimum): the change is refused, change the other value
+  first;
+- after sending, the value is read back. While the cloud is still passing
+  the command to the boiler the new value can take a few minutes to show;
+  if the cloud reports a different value an error is shown.
+
+The values are read with the normal thermostat data: no extra requests.
 
 ### Supported languages
 
@@ -216,7 +248,7 @@ Riello BeSMART cloud (`api.besmart-home.com`), like the official app:
   server certificate verified by default;
 - your **user id** and **WiFi box id**, in every request, together with the
   API token;
-- the commands you send (temperatures, modes).
+- the commands you send (temperatures, modes, thermostat settings).
 
 **Treat `user_id` and `wifi_box_id` as secrets.** Never publish them.
 

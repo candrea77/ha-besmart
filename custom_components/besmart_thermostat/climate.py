@@ -417,15 +417,12 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         elif hvac_mode in self._supported_modes:
             current_hvac_mode = self.hvac_mode
             if season is not None and self._season != season:
-                # PATCH 0.5: surface command failures in the UI instead of
-                # silently ignoring them.
-                ok = await self._call(
-                    self._cl.setThermostatSeason(self._wifi_box, self._room_id, season)
+                # PATCH 0.8: same write path as the thermostat settings
+                # entities (per-thermostat lock, read-back verification,
+                # translated errors shown in the UI).
+                await self.coordinator.async_set_thermostat_settings(
+                    self._wifi_box, self._room_id, self._room_name, {"season": season}
                 )
-                if not ok:
-                    raise HomeAssistantError(
-                        f"Failed to set season for {self._room_name} on BeSMART cloud"
-                    )
             if current_hvac_mode == HVACMode.OFF:
                 await self.async_turn_on()
             _LOGGER.debug("Set hvac_mode hvac_mode=%s(%s)", str(hvac_mode), str(season))

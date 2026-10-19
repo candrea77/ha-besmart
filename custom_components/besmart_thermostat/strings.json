@@ -141,6 +141,22 @@
                 }
             }
         },
+        "number": {
+            "max_heating_set_point": {
+                "name": "{room} Max Flow Temperature"
+            },
+            "min_heating_set_point": {
+                "name": "{room} Min Flow Temperature"
+            },
+            "sensor_influence": {
+                "name": "{room} Room Sensor Influence"
+            }
+        },
+        "select": {
+            "climatic_curve": {
+                "name": "{room} Climatic Curve"
+            }
+        },
         "sensor": {
             "battery_status": {
                 "name": "{room} Thermostat Battery Status",
@@ -237,6 +253,29 @@
                     }
                 }
             }
+        }
+    },
+    "exceptions": {
+        "min_above_max": {
+            "message": "The minimum flow temperature ({min} °C) cannot be higher than the maximum flow temperature ({max} °C) of thermostat {room}. Change the other value first."
+        },
+        "invalid_setting_value": {
+            "message": "{value} is not a valid value for this setting of thermostat {room}."
+        },
+        "boiler_offline": {
+            "message": "The boiler is offline: the settings of thermostat {room} cannot be changed."
+        },
+        "settings_read_failed": {
+            "message": "Could not read the current settings of thermostat {room} from the BeSMART cloud. Nothing was sent."
+        },
+        "settings_incomplete": {
+            "message": "The BeSMART cloud returned incomplete or out-of-range settings for thermostat {room}. Nothing was sent: try again in a few minutes."
+        },
+        "settings_write_failed": {
+            "message": "The BeSMART cloud rejected the new settings of thermostat {room}."
+        },
+        "settings_not_confirmed": {
+            "message": "The BeSMART cloud did not confirm the new settings of thermostat {room}. Check the values in the Riello app."
         }
     }
 }

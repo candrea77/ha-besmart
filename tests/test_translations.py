@@ -58,6 +58,28 @@ ENTITIES = {
     f"{WIFI_BOX}:technical_data": ("sensor.casa_technical_data", "Casa Technical data", "Casa Dati tecnici"),
 }
 
+# PATCH 0.8: thermostat settings entities (new unique_ids, existing ones above
+# unchanged).
+NEW_0_8_0 = {
+    "r1_climatic_curve": ("select.casa_living_climatic_curve", "Casa Living Climatic Curve", "Casa Curva climatica Living"),
+    "r1_max_heating_set_point": (
+        "number.casa_living_max_flow_temperature",
+        "Casa Living Max Flow Temperature",
+        "Casa Temperatura mandata massima Living",
+    ),
+    "r1_min_heating_set_point": (
+        "number.casa_living_min_flow_temperature",
+        "Casa Living Min Flow Temperature",
+        "Casa Temperatura mandata minima Living",
+    ),
+    "r1_sensor_influence": (
+        "number.casa_living_room_sensor_influence",
+        "Casa Living Room Sensor Influence",
+        "Casa Influenza sensore ambiente Living",
+    ),
+}
+ALL_ENTITIES = {**ENTITIES, **NEW_0_8_0}
+
 
 async def _setup(hass, language, entry=None):
     hass.config.language = language
@@ -80,8 +102,8 @@ def _registry_by_suffix(hass, entry):
 async def test_new_english_install_keeps_0_7_0_entity_ids_and_names(hass, cloud):
     entry = await _setup(hass, "en")
     registry = _registry_by_suffix(hass, entry)
-    assert set(registry) == set(ENTITIES)
-    for suffix, (entity_id, name_en, _) in ENTITIES.items():
+    assert set(registry) == set(ALL_ENTITIES)
+    for suffix, (entity_id, name_en, _) in ALL_ENTITIES.items():
         assert registry[suffix].entity_id == entity_id, suffix
         assert hass.states.get(entity_id).attributes["friendly_name"] == name_en
 
@@ -89,7 +111,7 @@ async def test_new_english_install_keeps_0_7_0_entity_ids_and_names(hass, cloud)
 async def test_italian_names_are_translated(hass, cloud):
     entry = await _setup(hass, "it")
     registry = _registry_by_suffix(hass, entry)
-    for suffix, (_, _, name_it) in ENTITIES.items():
+    for suffix, (_, _, name_it) in ALL_ENTITIES.items():
         state = hass.states.get(registry[suffix].entity_id)
         assert state.attributes["friendly_name"] == name_it, suffix
 
@@ -120,7 +142,7 @@ async def test_existing_entities_keep_unique_id_and_entity_id(hass, cloud, langu
         )
     await _setup(hass, language, entry)
     after = _registry_by_suffix(hass, entry)
-    assert set(after) == set(ENTITIES)
+    assert set(after) == set(ALL_ENTITIES)
     for suffix, (entity_id, _, name_it) in ENTITIES.items():
         assert after[suffix].entity_id == entity_id, suffix
         assert hass.states.get(entity_id) is not None
@@ -170,7 +192,10 @@ def test_translation_files_have_the_same_keys():
 def test_every_entity_uses_a_translation_key():
     sources = "".join(
         (BASE / f).read_text()
-        for f in ("climate.py", "water_heater.py", "sensor.py", "binary_sensor.py", "button.py")
+        for f in (
+            "climate.py", "water_heater.py", "sensor.py", "binary_sensor.py", "button.py",
+            "number.py", "select.py", "entity.py",
+        )
     )
     assert "_attr_name =" not in sources
     en = _load("translations/en.json")["entity"]
@@ -181,6 +206,8 @@ def test_every_entity_uses_a_translation_key():
                    "outdoor_temperature", "modulation", "technical_data"],
         "binary_sensor": ["flame", "circulator", "dhw_tap"],
         "button": ["refresh_now", "read_technical_data"],
+        "number": ["max_heating_set_point", "min_heating_set_point", "sensor_influence"],
+        "select": ["climatic_curve"],
     }.items():
         for key in keys:
             assert f'_attr_translation_key = "{key}"' in sources, key
