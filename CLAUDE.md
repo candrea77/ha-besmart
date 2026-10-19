@@ -22,7 +22,7 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
    4 characters). Never log full URLs or the login payload.
    `diagnostics.py` must keep redacting `token`, `user_id`, `email` and the
    credentials, and pseudonymize wifi box ids (`box_1`...), also as dict keys.
-   The cloud has no per-user token: **user_id + wifi_box_id are credentials**.
+   **user_id + wifi_box_id are credentials**.
    Never show them in UI messages or device info (no `model_id`).
    Never chain cloud/aiohttp exceptions into Home Assistant exceptions
    (`ConfigEntryNotReady`, `UpdateFailed`, `HomeAssistantError`): HA shows
@@ -68,6 +68,12 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
 
 ## Conventions
 
+- Every entity is named via `_attr_translation_key` (room names through
+  `translation_placeholders`), never a fixed `_attr_name`. Keep
+  `strings.json`, `translations/en.json` and `translations/it.json` in sync
+  (same keys; `strings.json` == `en.json`). English names must not change:
+  they generate the entity_ids of new English installs. Translation keys are
+  lowercase, so values like the uppercase presets are not translated yet.
 - Comments mark changes with `PATCH x.y:`, matching the existing code.
 - On every release bump `version` in
   `custom_components/besmart_thermostat/manifest.json` and update `info.md`

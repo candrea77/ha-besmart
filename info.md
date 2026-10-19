@@ -1,5 +1,27 @@
 ## Changes as compared to your installed version:
 
+## 0.7.1
+
+### ⚠️ Italian users: displayed names change
+- All entities now have translated names, states and attributes. With Home
+  Assistant in **Italian**, the displayed names change, e.g.
+  "PIANO 1 Thermostat" → "Termostato PIANO 1", "Water Heater" →
+  "Acqua calda sanitaria", "Boiler Modulation" → "Modulazione caldaia";
+  Boiler Flame shows *Accesa/Spenta*, DHW Tap *In corso/Nessun prelievo*.
+- **Check voice commands (Assist), aliases, dashboards and templates that use
+  the entity name (`friendly_name`)**.
+- **Entity ids and existing automations are unchanged**; names you set
+  yourself are kept.
+- New Italian installations get Italian entity ids (e.g.
+  `sensor.<device>_modulazione_caldaia`): standard Home Assistant behaviour.
+- English names and entity ids are unchanged.
+- Thermostat presets are not translated yet.
+
+### Other
+- No other behaviour changes.
+
+## 0.7.0
+
 ### ⚠️ Before updating — breaking / irreversible
 - **Make a Home Assistant backup first.** On the first start the BeSMART
   config entry is **migrated to a new format (version 2). The migration is
@@ -52,13 +74,12 @@
   reconfigure, refresh).
 - TLS verification on by default; Repairs warnings when it is off or when
   the cloud certificate cannot be verified (credentials are not sent then).
-- The BeSMART cloud has no per-user token, so **user id and WiFi box id are
-  treated as secrets**: masked in all logs (also inside payloads), replaced
-  by `box_1`, `box_2`... in diagnostics, removed from device info and error
-  messages. The API token is redacted too. Thermostat and boiler ids are
-  reduced to their last 4 characters in logs and diagnostics, and the
-  weekly program is summarized ("7 days x 48 slots") instead of being
-  logged in full on every update.
+- **User id and WiFi box id are treated as secrets**: masked in all logs
+  (also inside payloads), replaced by `box_1`, `box_2`... in diagnostics,
+  removed from device info and error messages. The API token is redacted
+  too. Thermostat and boiler ids are reduced to their last 4 characters in
+  logs and diagnostics, and the weekly program is summarized
+  ("7 days x 48 slots") instead of being logged in full on every update.
 - Config flow validates the login and prevents adding the same account
   twice; reauthentication and reconfigure cannot switch to another account.
 - Commands are validated before being sent: thermostat temperature

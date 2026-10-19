@@ -69,6 +69,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
     """Representation of a Besmart thermostat."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "thermostat"
     _attr_unique_id: str
 
     # BeSmart thModel = 5
@@ -153,7 +154,10 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         # device + name thanks to _attr_has_entity_name).
         # PATCH 0.5: removed the dead async_generate_entity_id call (it wrote
         # to self._entity_id, which HA never reads).
-        self._attr_name = f"{self._room_name} Thermostat"
+        # PATCH 0.7.1: translated name "{room} Thermostat" (same English
+        # name as before, so the entity_id of new English installs is
+        # unchanged).
+        self._attr_translation_placeholders = {"room": str(self._room_name)}
 
         # Disable backwards compatibility for new turn_on/off methods
         self._enable_turn_on_off_backwards_compatibility = False

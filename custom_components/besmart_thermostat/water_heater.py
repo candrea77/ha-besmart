@@ -55,6 +55,7 @@ class WaterHeater(
     """Representation of a Besmart water heater."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "water_heater"
     _attr_unique_id: str
 
     # BeSmart work_mode
@@ -97,7 +98,7 @@ class WaterHeater(
         self._attr_unique_id = f"{self._entry_id}:{self._wifi_box}:water_heater"
 
         # PATCH 0.5: removed the dead async_generate_entity_id call.
-        self._attr_name = "Water Heater"
+        # PATCH 0.7.1: translated name (translation_key "water_heater").
 
         # Disable backwards compatibility for new turn_on/off methods
         self._enable_turn_on_off_backwards_compatibility = False

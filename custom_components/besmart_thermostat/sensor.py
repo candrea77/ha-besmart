@@ -114,7 +114,8 @@ class BatteryStatusSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Senso
         self._wifi_box = wifi_box
         self._room_id = room_id
         self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_battery_status"
-        self._attr_name = f"{room_name} Thermostat Battery Status"
+        # PATCH 0.7.1: translated name "{room} Thermostat Battery Status".
+        self._attr_translation_placeholders = {"room": str(room_name)}
         self._attr_device_info = device_info
 
     def _battery_low(self):
@@ -150,6 +151,7 @@ class ThermostatTemperatureSensor(CoordinatorEntity[BesmartDataUpdateCoordinator
     """
 
     _attr_has_entity_name = True
+    _attr_translation_key = "room_temperature"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 1
@@ -160,7 +162,8 @@ class ThermostatTemperatureSensor(CoordinatorEntity[BesmartDataUpdateCoordinator
         self._wifi_box = wifi_box
         self._room_id = room_id
         self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_temperature"
-        self._attr_name = f"{room_name} Temperature"
+        # PATCH 0.7.1: translated name "{room} Temperature".
+        self._attr_translation_placeholders = {"room": str(room_name)}
         self._attr_device_info = device_info
 
     @property
@@ -232,7 +235,7 @@ class BoilerSystemPressureSensor(BesmartBoilerSensor):
     _attr_device_class = SensorDeviceClass.PRESSURE
     _attr_native_unit_of_measurement = UnitOfPressure.BAR
     _attr_suggested_display_precision = 1
-    _attr_name = "Boiler System Pressure"
+    _attr_translation_key = "system_pressure"  # PATCH 0.7.1: was "Boiler System Pressure"
 
 
 class BoilerOutdoorTemperatureSensor(BesmartBoilerSensor):
@@ -241,7 +244,7 @@ class BoilerOutdoorTemperatureSensor(BesmartBoilerSensor):
     DATA_KEY = "outdoor_probe_temp"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
-    _attr_name = "Outdoor Temperature"
+    _attr_translation_key = "outdoor_temperature"  # PATCH 0.7.1: was "Outdoor Temperature"
 
     @property
     def native_unit_of_measurement(self):
@@ -262,7 +265,7 @@ class BoilerWaterTemperatureSensor(BesmartBoilerSensor):
     DATA_KEY = "heating_current_temp"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_suggested_display_precision = 1
-    _attr_name = "Boiler Water Temperature"
+    _attr_translation_key = "water_temperature"  # PATCH 0.7.1: was "Boiler Water Temperature"
 
     @property
     def native_unit_of_measurement(self):
@@ -282,7 +285,7 @@ class BoilerModulationSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Se
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Boiler Modulation"
+    _attr_translation_key = "modulation"  # PATCH 0.7.1: was "Boiler Modulation"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0

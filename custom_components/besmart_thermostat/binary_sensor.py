@@ -97,7 +97,7 @@ class BoilerFlameBinarySensor(BesmartBoilerBinarySensor):
     """Burner flame present."""
 
     DATA_KEY = "flame_status"
-    _attr_name = "Boiler Flame"
+    _attr_translation_key = "flame"  # PATCH 0.7.1: was _attr_name "Boiler Flame"
 
     @property
     def icon(self):
@@ -109,7 +109,7 @@ class BoilerCirculatorBinarySensor(BesmartBoilerBinarySensor):
     """Central heating active (circulator pump running)."""
 
     DATA_KEY = "heating_status"
-    _attr_name = "Boiler Circulator"
+    _attr_translation_key = "circulator"  # PATCH 0.7.1: was "Boiler Circulator"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
 
     @property
@@ -122,7 +122,7 @@ class BoilerDhwTapBinarySensor(BesmartBoilerBinarySensor):
     """Domestic hot water draw in progress (hot water tap open)."""
 
     DATA_KEY = "dhw_active"
-    _attr_name = "DHW Tap"
+    _attr_translation_key = "dhw_tap"  # PATCH 0.7.1: was "DHW Tap"
 
     @property
     def icon(self):
