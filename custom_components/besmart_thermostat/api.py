@@ -554,7 +554,12 @@ class BesmartClient:
         message = data.get("message") if data else None
         if not isinstance(message, dict):
             return None
-        _LOGGER.debug("thermostat settings: %s", self._redact_payload(message))
+        # PATCH 0.8 (b2): masked thermostat id, to tell thermostats apart.
+        _LOGGER.debug(
+            "thermostat settings (thermostat %s): %s",
+            mask_id(thermostat),
+            self._redact_payload(message),
+        )
         return message
 
     async def boiler(self, wifi_box: str):
@@ -709,7 +714,14 @@ class BesmartClient:
                     )
             else:
                 _LOGGER.debug("%s: non-JSON response, assuming success", name)
-            _LOGGER.debug("%s ok: %s", name, self._redact_payload(data))
+            # PATCH 0.8 (b2): masked thermostat id for thermostat commands.
+            if payload.get("thermostat_id") is not None:
+                _LOGGER.debug(
+                    "%s ok (thermostat %s): %s",
+                    name, mask_id(payload["thermostat_id"]), self._redact_payload(data),
+                )
+            else:
+                _LOGGER.debug("%s ok: %s", name, self._redact_payload(data))
             return True
         except ConfigEntryAuthFailed:
             raise

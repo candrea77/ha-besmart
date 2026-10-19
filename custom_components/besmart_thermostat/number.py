@@ -6,7 +6,12 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import MAX_HEATING_SET_POINT_RANGE, MIN_HEATING_SET_POINT_RANGE, SENSOR_INFLUENCE_RANGE
+from .api import (
+    MAX_HEATING_SET_POINT_RANGE,
+    MIN_HEATING_SET_POINT_RANGE,
+    SENSOR_INFLUENCE_RANGE,
+    parse_value,
+)
 from .entity import BesmartThermostatSettingEntity, thermostat_setting_entities
 
 
@@ -43,7 +48,21 @@ class BesmartSettingNumber(BesmartThermostatSettingEntity, NumberEntity):
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:
-        await self._async_write(value)
+        try:
+            await self._async_write(value)
+        except Exception:
+            # PATCH 0.8 (b2): re-send the real state after a refused value.
+            # The value typed in the number box stays visible anyway: Home
+            # Assistant does not send an unchanged state to the frontend
+            # (only last_reported changes), a frontend limit. The dynamic
+            # limits below make Home Assistant refuse such values first.
+            self.async_write_ha_state()
+            raise
+
+    def _other(self, field: str) -> float | None:
+        """Current value of the other set point (dynamic limits)."""
+        data = self.coordinator.thermostat_data(self._wifi_box, self._room_id)
+        return parse_value(data.get(field)) if data else None
 
 
 class MaxFlowTemperatureNumber(BesmartSettingNumber):
@@ -56,6 +75,13 @@ class MaxFlowTemperatureNumber(BesmartSettingNumber):
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_icon = "mdi:thermometer-chevron-up"
 
+    @property
+    def native_min_value(self) -> float:
+        """PATCH 0.8 (b2): never below the current minimum (within 15-80)."""
+        low, high = self.RANGE
+        current_min = self._other("min_heating_set_point")
+        return low if current_min is None else min(high, max(low, current_min))
+
 
 class MinFlowTemperatureNumber(BesmartSettingNumber):
     """Minimum flow temperature (min_heating_set_point), 10-75 °C."""
@@ -66,6 +92,13 @@ class MinFlowTemperatureNumber(BesmartSettingNumber):
     _attr_device_class = NumberDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_icon = "mdi:thermometer-chevron-down"
+
+    @property
+    def native_max_value(self) -> float:
+        """PATCH 0.8 (b2): never above the current maximum (within 10-75)."""
+        low, high = self.RANGE
+        current_max = self._other("max_heating_set_point")
+        return high if current_max is None else min(high, max(low, current_max))
 
 
 class SensorInfluenceNumber(BesmartSettingNumber):
