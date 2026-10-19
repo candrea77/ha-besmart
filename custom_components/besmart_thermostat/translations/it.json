@@ -118,7 +118,7 @@
         },
         "climate": {
             "thermostat": {
-                "name": "Termostato {room}",
+                "name": "Termostato",
                 "state_attributes": {
                     "mode": {
                         "name": "Modalità BeSMART"
@@ -141,9 +141,25 @@
                 }
             }
         },
+        "number": {
+            "max_heating_set_point": {
+                "name": "Mandata massima"
+            },
+            "min_heating_set_point": {
+                "name": "Mandata minima"
+            },
+            "sensor_influence": {
+                "name": "Influenza sensore ambiente"
+            }
+        },
+        "select": {
+            "climatic_curve": {
+                "name": "Curva climatica"
+            }
+        },
         "sensor": {
             "battery_status": {
-                "name": "Stato batteria termostato {room}",
+                "name": "Stato batteria termostato",
                 "state": {
                     "low": "Bassa",
                     "good": "Buona",
@@ -151,7 +167,7 @@
                 }
             },
             "room_temperature": {
-                "name": "Temperatura {room}"
+                "name": "Temperatura"
             },
             "system_pressure": {
                 "name": "Pressione impianto caldaia"
@@ -237,6 +253,29 @@
                     }
                 }
             }
+        }
+    },
+    "exceptions": {
+        "min_above_max": {
+            "message": "La temperatura di mandata minima ({min} °C) non può superare la massima ({max} °C) del termostato {room}. Modifica prima l'altro valore."
+        },
+        "invalid_setting_value": {
+            "message": "{value} non è un valore valido per questa impostazione del termostato {room}."
+        },
+        "boiler_offline": {
+            "message": "La caldaia è offline: le impostazioni del termostato {room} non possono essere modificate."
+        },
+        "settings_read_failed": {
+            "message": "Impossibile leggere dal cloud BeSMART le impostazioni attuali del termostato {room}. Non è stato inviato nulla."
+        },
+        "settings_incomplete": {
+            "message": "Il cloud BeSMART ha restituito impostazioni incomplete o fuori dai limiti per il termostato {room}. Non è stato inviato nulla: riprova tra qualche minuto."
+        },
+        "settings_write_failed": {
+            "message": "Il cloud BeSMART ha rifiutato le nuove impostazioni del termostato {room}."
+        },
+        "settings_not_confirmed": {
+            "message": "Il cloud BeSMART non ha confermato le nuove impostazioni del termostato {room}. Controlla i valori nell'app Riello."
         }
     }
 }

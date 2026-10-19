@@ -8,7 +8,10 @@ import json
 from pathlib import Path
 
 import pytest
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+
+from custom_components.besmart_thermostat.const import DOMAIN
 
 from .conftest import WIFI_BOX
 from .test_setup_and_flows import _custom_integrations, cloud, v2_entry  # noqa: F401
@@ -58,6 +61,41 @@ ENTITIES = {
     f"{WIFI_BOX}:technical_data": ("sensor.casa_technical_data", "Casa Technical data", "Casa Dati tecnici"),
 }
 
+# PATCH 0.8 (b2): one device per thermostat, named after the room (Andrea's
+# choice): thermostat entities of NEW installs are named "<room> <entity>"
+# (entity_id climate.living_thermostat instead of climate.casa_living_thermostat).
+# Existing installs keep the 0.7.0 entity_ids above (registry).
+THERMOSTAT_SUFFIXES = {"r1", "r1_temperature", "r1_battery_status"}
+THERMOSTAT_0_8_0 = {
+    "r1": ("climate.living_thermostat", "Living Thermostat", "Living Termostato"),
+    "r1_temperature": ("sensor.living_temperature", "Living Temperature", "Living Temperatura"),
+    "r1_battery_status": (
+        "sensor.living_thermostat_battery_status",
+        "Living Thermostat Battery Status",
+        "Living Stato batteria termostato",
+    ),
+    "r1_climatic_curve": ("select.living_climatic_curve", "Living Climatic Curve", "Living Curva climatica"),
+    "r1_max_heating_set_point": (
+        "number.living_max_flow_temperature",
+        "Living Max Flow Temperature",
+        "Living Mandata massima",
+    ),
+    "r1_min_heating_set_point": (
+        "number.living_min_flow_temperature",
+        "Living Min Flow Temperature",
+        "Living Mandata minima",
+    ),
+    "r1_sensor_influence": (
+        "number.living_room_sensor_influence",
+        "Living Room Sensor Influence",
+        "Living Influenza sensore ambiente",
+    ),
+}
+ALL_ENTITIES = {
+    **{k: v for k, v in ENTITIES.items() if k not in THERMOSTAT_SUFFIXES},
+    **THERMOSTAT_0_8_0,
+}
+
 
 async def _setup(hass, language, entry=None):
     hass.config.language = language
@@ -77,11 +115,11 @@ def _registry_by_suffix(hass, entry):
     }
 
 
-async def test_new_english_install_keeps_0_7_0_entity_ids_and_names(hass, cloud):
+async def test_new_english_install_entity_ids_and_names(hass, cloud):
     entry = await _setup(hass, "en")
     registry = _registry_by_suffix(hass, entry)
-    assert set(registry) == set(ENTITIES)
-    for suffix, (entity_id, name_en, _) in ENTITIES.items():
+    assert set(registry) == set(ALL_ENTITIES)
+    for suffix, (entity_id, name_en, _) in ALL_ENTITIES.items():
         assert registry[suffix].entity_id == entity_id, suffix
         assert hass.states.get(entity_id).attributes["friendly_name"] == name_en
 
@@ -89,7 +127,7 @@ async def test_new_english_install_keeps_0_7_0_entity_ids_and_names(hass, cloud)
 async def test_italian_names_are_translated(hass, cloud):
     entry = await _setup(hass, "it")
     registry = _registry_by_suffix(hass, entry)
-    for suffix, (_, _, name_it) in ENTITIES.items():
+    for suffix, (_, _, name_it) in ALL_ENTITIES.items():
         state = hass.states.get(registry[suffix].entity_id)
         assert state.attributes["friendly_name"] == name_it, suffix
 
@@ -99,15 +137,21 @@ async def test_new_italian_install_gets_italian_entity_ids(hass, cloud):
     entry = await _setup(hass, "it")
     registry = _registry_by_suffix(hass, entry)
     assert registry[f"{WIFI_BOX}:modulation_ratio"].entity_id == "sensor.casa_modulazione_caldaia"
-    assert registry["r1"].entity_id == "climate.casa_termostato_living"
+    assert registry["r1"].entity_id == "climate.living_termostato"
 
 
 @pytest.mark.parametrize("language", ["en", "it"])
 async def test_existing_entities_keep_unique_id_and_entity_id(hass, cloud, language):
-    """Entities registered by 0.7.0 (English names) are unchanged after the update."""
+    """Entities registered by 0.7.x (English names, all on the WiFi box device)
+    keep unique_id and entity_id; b2 moves the thermostat ones to the new
+    thermostat device and leaves no orphan device."""
     entry = v2_entry()
     entry.add_to_hass(hass)
     registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    box = devices.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.entry_id)}, name="Casa"
+    )
     for suffix, (entity_id, name_en, _) in ENTITIES.items():
         domain, object_id = entity_id.split(".")
         registry.async_get_or_create(
@@ -116,14 +160,30 @@ async def test_existing_entities_keep_unique_id_and_entity_id(hass, cloud, langu
             f"{entry.entry_id}:{suffix}",
             suggested_object_id=object_id,
             config_entry=entry,
+            device_id=box.id,
             original_name=name_en,
         )
     await _setup(hass, language, entry)
     after = _registry_by_suffix(hass, entry)
-    assert set(after) == set(ENTITIES)
+    assert set(after) == set(ALL_ENTITIES)
     for suffix, (entity_id, _, name_it) in ENTITIES.items():
         assert after[suffix].entity_id == entity_id, suffix
+        assert after[suffix].unique_id == f"{entry.entry_id}:{suffix}"
         assert hass.states.get(entity_id) is not None
+
+    entry_devices = dr.async_entries_for_config_entry(devices, entry.entry_id)
+    assert len(entry_devices) == 2
+    (room,) = [d for d in entry_devices if d.id != box.id]
+    assert box.id == next(d.id for d in entry_devices if (DOMAIN, entry.entry_id) in d.identifiers)
+    assert room.identifiers == {(DOMAIN, f"{entry.entry_id}:r1")}
+    assert room.name == "Living" and room.via_device_id == box.id
+    assert room.model == "BeSMART thermostat" and room.model_id is None
+    for suffix, entity in after.items():
+        expected = room.id if suffix.startswith("r1") else box.id
+        assert entity.device_id == expected, suffix
+    # No orphan device: every device keeps at least one entity.
+    for device in entry_devices:
+        assert er.async_entries_for_device(registry, device.id), device.name
     if language == "it":
         # Only the displayed name changes.
         assert hass.states.get("sensor.casa_boiler_modulation").attributes["friendly_name"] == "Casa Modulazione caldaia"
@@ -170,7 +230,10 @@ def test_translation_files_have_the_same_keys():
 def test_every_entity_uses_a_translation_key():
     sources = "".join(
         (BASE / f).read_text()
-        for f in ("climate.py", "water_heater.py", "sensor.py", "binary_sensor.py", "button.py")
+        for f in (
+            "climate.py", "water_heater.py", "sensor.py", "binary_sensor.py", "button.py",
+            "number.py", "select.py", "entity.py",
+        )
     )
     assert "_attr_name =" not in sources
     en = _load("translations/en.json")["entity"]
@@ -181,6 +244,8 @@ def test_every_entity_uses_a_translation_key():
                    "outdoor_temperature", "modulation", "technical_data"],
         "binary_sensor": ["flame", "circulator", "dhw_tap"],
         "button": ["refresh_now", "read_technical_data"],
+        "number": ["max_heating_set_point", "min_heating_set_point", "sensor_influence"],
+        "select": ["climatic_curve"],
     }.items():
         for key in keys:
             assert f'_attr_translation_key = "{key}"' in sources, key
@@ -192,5 +257,21 @@ def test_italian_texts():
     assert it["binary_sensor"]["flame"]["state"] == {"on": "Accesa", "off": "Spenta"}
     assert it["binary_sensor"]["dhw_tap"]["state"] == {"on": "In corso", "off": "Nessun prelievo"}
     assert it["sensor"]["battery_status"]["state"] == {"low": "Bassa", "good": "Buona", "unknown": "Sconosciuta"}
-    assert it["climate"]["thermostat"]["name"] == "Termostato {room}"
+    assert it["climate"]["thermostat"]["name"] == "Termostato"
 
+
+
+async def test_room_renamed_in_the_app_keeps_device_and_ids(hass, cloud):
+    """b2: the thermostat device follows the cloud id, not the room name."""
+    entry = await _setup(hass, "en")
+    devices = dr.async_get(hass)
+    before = {d.id for d in dr.async_entries_for_config_entry(devices, entry.entry_id)}
+    route = json.loads(json.dumps(cloud.routes["Wifi_boxes/data"]))
+    route["message"]["thermostat"][0]["name"] = "Soggiorno"
+    cloud.set_route("Wifi_boxes/data", route)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    after = dr.async_entries_for_config_entry(devices, entry.entry_id)
+    assert {d.id for d in after} == before
+    assert "Soggiorno" in {d.name for d in after}
+    assert er.async_get(hass).async_get_entity_id("climate", DOMAIN, f"{entry.entry_id}:r1") == "climate.living_thermostat"

@@ -62,6 +62,19 @@ MAX_HEATING_SET_POINT_RANGE = (15.0, 80.0)
 MIN_HEATING_SET_POINT_RANGE = (10.0, 75.0)
 CLIMATIC_CURVES = (0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0)
 SENSOR_INFLUENCE_RANGE = (0.0, 20.0)
+# PATCH 0.8: fields of PUT Thermostats/setting besides unit and season
+# (ParamsMapUtils.getSettingsParams of the official app).
+THERMOSTAT_SETTINGS_FIELDS = (
+    "max_heating_set_point",
+    "min_heating_set_point",
+    "sensor_influence",
+    "climatic_curve",
+)
+_SETTING_RANGES = {
+    "max_heating_set_point": MAX_HEATING_SET_POINT_RANGE,
+    "min_heating_set_point": MIN_HEATING_SET_POINT_RANGE,
+    "sensor_influence": SENSOR_INFLUENCE_RANGE,
+}
 
 
 def _in_range(value, bounds) -> bool:
@@ -98,6 +111,41 @@ def valid_sensor_influence(value) -> bool:
     return _in_range(parse_value(value), SENSOR_INFLUENCE_RANGE)
 
 
+def _format_number(value) -> str:
+    """PATCH 0.8: 35.0 -> "35", 1.5 -> "1.5" (for messages)."""
+    number = parse_value(value)
+    return "?" if number is None else f"{number:g}"
+
+
+def format_thermostat_setting(field: str, value) -> str:
+    """PATCH 0.8: validate a requested thermostat setting, return the value to send.
+
+    Set points and sensor influence: integers (step 1) within the app
+    limits, sent as "45". Climatic curve: one of CLIMATIC_CURVES, sent with
+    one decimal ("1.5"). Raises BesmartValidationError otherwise.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = math.nan
+    if field == "climatic_curve":
+        for curve in CLIMATIC_CURVES:
+            if math.isfinite(number) and abs(number - curve) < 1e-6:
+                return f"{curve:.1f}"
+    elif (
+        field in _SETTING_RANGES
+        and math.isfinite(number)
+        and number == int(number)
+        and _in_range(number, _SETTING_RANGES[field])
+    ):
+        return str(int(number))
+    raise BesmartValidationError(
+        f"Invalid value for {field}: {value!r}",
+        translation_key="invalid_setting_value",
+        placeholders={"value": str(value)},
+    )
+
+
 class BesmartError(Exception):
     """PATCH 0.7: cloud error whose message never contains secrets.
 
@@ -116,7 +164,23 @@ class BesmartTLSError(BesmartError):
 
 
 class BesmartValidationError(ValueError):
-    """PATCH 0.7: a write command was rejected before reaching the cloud."""
+    """PATCH 0.7: a write command was rejected before reaching the cloud.
+
+    PATCH 0.8: optional translation key/placeholders for the UI message.
+    """
+
+    def __init__(self, message: str, *, translation_key=None, placeholders=None) -> None:
+        super().__init__(message)
+        self.translation_key = translation_key
+        self.placeholders = placeholders or {}
+
+
+class BesmartSettingsError(BesmartError):
+    """PATCH 0.8: thermostat settings not written (fixed message + translation key)."""
+
+    def __init__(self, message: str, translation_key: str) -> None:
+        super().__init__(message)
+        self.translation_key = translation_key
 
 
 def mask_id(value) -> str:
@@ -490,7 +554,12 @@ class BesmartClient:
         message = data.get("message") if data else None
         if not isinstance(message, dict):
             return None
-        _LOGGER.debug("thermostat settings: %s", self._redact_payload(message))
+        # PATCH 0.8 (b2): masked thermostat id, to tell thermostats apart.
+        _LOGGER.debug(
+            "thermostat settings (thermostat %s): %s",
+            mask_id(thermostat),
+            self._redact_payload(message),
+        )
         return message
 
     async def boiler(self, wifi_box: str):
@@ -645,7 +714,14 @@ class BesmartClient:
                     )
             else:
                 _LOGGER.debug("%s: non-JSON response, assuming success", name)
-            _LOGGER.debug("%s ok: %s", name, self._redact_payload(data))
+            # PATCH 0.8 (b2): masked thermostat id for thermostat commands.
+            if payload.get("thermostat_id") is not None:
+                _LOGGER.debug(
+                    "%s ok (thermostat %s): %s",
+                    name, mask_id(payload["thermostat_id"]), self._redact_payload(data),
+                )
+            else:
+                _LOGGER.debug("%s ok: %s", name, self._redact_payload(data))
             return True
         except ConfigEntryAuthFailed:
             raise
@@ -694,57 +770,131 @@ class BesmartClient:
             },
         )
 
-    async def setThermostatSeason(self, wifi_box: str, thermostat: str, season: str):
-        if str(season) not in SEASONS:
-            raise BesmartValidationError(f"Invalid season: {season!r}")
+    async def writeThermostatSettings(
+        self, wifi_box: str, thermostat: str, changes: dict, *, season=None
+    ) -> dict:
+        """PATCH 0.8: read-modify-write of PUT Thermostats/setting.
+
+        ``changes`` maps "season" and/or THERMOSTAT_SETTINGS_FIELDS to the new
+        values. The current settings are read fresh right before the write
+        and every field that is not changed is sent back exactly as read,
+        all together like the official app does. ``season`` is a fallback
+        (season of the last thermostat read) used only when the settings
+        read does not report one.
+
+        Raises BesmartValidationError (invalid requested value, minimum above
+        maximum: nothing read, nothing sent) or BesmartSettingsError (read
+        failed, partial or out-of-range settings: nothing sent; or the cloud
+        rejected the write). Returns the changed fields as sent.
+        """
+        formatted = {}
+        for field, value in changes.items():
+            if field == "season":
+                if str(value) not in SEASONS:
+                    raise BesmartValidationError(f"Invalid season: {value!r}")
+                formatted[field] = str(value)
+            elif field in THERMOSTAT_SETTINGS_FIELDS:
+                formatted[field] = format_thermostat_setting(field, value)
+            else:
+                raise BesmartValidationError(f"Unknown thermostat setting: {field!r}")
+
         settings = await self.thermostatSettings(wifi_box, thermostat)
         if not settings:
-            _LOGGER.warning("Error in setThermostatSeason(): could not read current settings")
-            return False
+            _LOGGER.warning("Error in setThermostatSettings(): could not read current settings")
+            raise BesmartSettingsError(
+                "could not read the current thermostat settings", "settings_read_failed"
+            )
         # PATCH 0.7: the settings read from the cloud are written back as they
         # are, so refuse to send anything if a field is missing or invalid
         # (it would misconfigure set points or the climatic curve).
-        fields = ("min_heating_set_point", "max_heating_set_point", "sensor_influence", "climatic_curve")
+        fields = THERMOSTAT_SETTINGS_FIELDS
         if str(settings.get("unit")) not in ("0", "1") or any(
             parse_value(settings.get(f)) is None for f in fields
         ):
             _LOGGER.warning(
-                "Error in setThermostatSeason(): incomplete thermostat settings, nothing sent"
+                "Error in setThermostatSettings(): incomplete thermostat settings, nothing sent"
             )
-            return False
+            raise BesmartSettingsError("incomplete thermostat settings", "settings_incomplete")
         # PATCH 0.7 (b5/b6): partial cloud reads report the set points and
         # the climatic curve as 0 (with cmd_stand_status "1"): never write
         # those back. Limits are the official app's (see valid_* helpers).
+        # PATCH 0.8: cmd_stand_status "1" alone does not block a write: it
+        # only means the cloud is still passing a previous command to the
+        # boiler (it stays "1" for ~30 s after a write), and blocking would
+        # prevent restoring a value right away. Only a partial read (zeros,
+        # missing or out-of-range fields) does.
         if (
-            str(settings.get("cmd_stand_status", "")).strip() == "1"
-            or not valid_heating_set_points(
+            not valid_heating_set_points(
                 settings.get("min_heating_set_point"), settings.get("max_heating_set_point")
             )
             or not valid_climatic_curve(settings.get("climatic_curve"))
             or not valid_sensor_influence(settings.get("sensor_influence"))
         ):
             _LOGGER.warning(
-                "Error in setThermostatSeason(): partial or out-of-range thermostat "
+                "Error in setThermostatSettings(): partial or out-of-range thermostat "
                 "settings (thermostat %s), nothing sent",
                 mask_id(thermostat),
             )
-            return False
+            raise BesmartSettingsError(
+                "partial or out-of-range thermostat settings", "settings_incomplete"
+            )
+
+        new_season = formatted.get("season")
+        if new_season is None:
+            for candidate in (settings.get("season"), season):
+                if candidate is not None and str(candidate).strip() in SEASONS:
+                    new_season = str(candidate).strip()
+                    break
+            else:
+                _LOGGER.warning(
+                    "Error in setThermostatSettings(): unknown season (thermostat %s), "
+                    "nothing sent",
+                    mask_id(thermostat),
+                )
+                raise BesmartSettingsError("unknown thermostat season", "settings_incomplete")
+
+        values = {f: formatted.get(f, settings.get(f)) for f in fields}
+        # PATCH 0.8: never adjust the other set point: refuse min > max.
+        if parse_value(values["min_heating_set_point"]) > parse_value(
+            values["max_heating_set_point"]
+        ):
+            raise BesmartValidationError(
+                "The minimum flow temperature cannot be higher than the maximum",
+                translation_key="min_above_max",
+                placeholders={
+                    "min": _format_number(values["min_heating_set_point"]),
+                    "max": _format_number(values["max_heating_set_point"]),
+                },
+            )
 
         # PATCH 0.5 (FIX): the season/settings payload was being PUT to the
         # SET_THERMOSTAT_TEMP endpoint. The payload (unit, season, min/max
         # heating set point, sensor_influence, climatic_curve) belongs to
         # the settings endpoint, so use SET_THERMOSTAT_SETTINGS.
-        return await self._write(
-            "setThermostatSeason",
+        ok = await self._write(
+            "setThermostatSettings",
             self.SET_THERMOSTAT_SETTINGS,
             {
                 "unit": str(settings.get("unit")),
-                "season": str(season),
-                **{f: settings.get(f) for f in fields},
+                "season": new_season,
+                **values,
                 "wifi_box_id": wifi_box,
                 "thermostat_id": thermostat,
             },
         )
+        if not ok:
+            raise BesmartSettingsError(
+                "the cloud rejected the thermostat settings", "settings_write_failed"
+            )
+        return formatted
+
+    async def setThermostatSeason(self, wifi_box: str, thermostat: str, season: str):
+        """True if the season was written (PATCH 0.8: wraps writeThermostatSettings)."""
+        try:
+            await self.writeThermostatSettings(wifi_box, thermostat, {"season": season})
+        except BesmartSettingsError:
+            return False
+        return True
 
     async def setBoilerMode(self, wifi_box: str, mode: str):
         if str(mode) not in BOILER_MODES:

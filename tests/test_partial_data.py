@@ -143,7 +143,6 @@ WRITE_OK = {"error_code": 0, "status": True}
 @pytest.mark.parametrize(
     "override",
     [
-        {"cmd_stand_status": "1"},
         # partial read: zeros
         {"min_heating_set_point": "0.0"},
         {"max_heating_set_point": "0.0"},
@@ -184,6 +183,7 @@ async def test_season_refuses_partial_or_out_of_range_settings(make_client, capl
         {"climatic_curve": "2"},
         {"sensor_influence": "0"},
         {"sensor_influence": "20"},
+        {"cmd_stand_status": "1"},  # 0.8: complete read, still synchronising
     ],
 )
 async def test_season_accepts_app_limits(make_client, override):

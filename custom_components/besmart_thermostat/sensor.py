@@ -68,11 +68,11 @@ async def async_setup_entry(
             room_id = thermostat.get("id")
             room_name = thermostat.get("name")
             new_entities.append(
-                BatteryStatusSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.device_info)
+                BatteryStatusSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.thermostat_device_info(room_id))
             )
             # PATCH 0.6: room temperature measured by each thermostat.
             new_entities.append(
-                ThermostatTemperatureSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.device_info)
+                ThermostatTemperatureSensor(coordinator, config_entry, wifi_box, room_id, room_name, device.thermostat_device_info(room_id))
             )
 
         # Boiler sensors, only if this wifi box actually reports a boiler.
@@ -115,7 +115,8 @@ class BatteryStatusSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Senso
         self._room_id = room_id
         self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_battery_status"
         # PATCH 0.7.1: translated name "{room} Thermostat Battery Status".
-        self._attr_translation_placeholders = {"room": str(room_name)}
+        # PATCH 0.8 (b2): no {room} in the name: the device (named
+        # after the room) already prefixes it.
         self._attr_device_info = device_info
 
     def _battery_low(self):
@@ -163,7 +164,8 @@ class ThermostatTemperatureSensor(CoordinatorEntity[BesmartDataUpdateCoordinator
         self._room_id = room_id
         self._attr_unique_id = f"{config_entry.entry_id}:{room_id}_temperature"
         # PATCH 0.7.1: translated name "{room} Temperature".
-        self._attr_translation_placeholders = {"room": str(room_name)}
+        # PATCH 0.8 (b2): no {room} in the name: the device (named
+        # after the room) already prefixes it.
         self._attr_device_info = device_info
 
     @property
