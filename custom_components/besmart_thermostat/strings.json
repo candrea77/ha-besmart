@@ -89,6 +89,25 @@
         }
     },
     "entity": {
+        "binary_sensor": {
+            "flame": {
+                "name": "Boiler Flame",
+                "state": {
+                    "on": "On",
+                    "off": "Off"
+                }
+            },
+            "circulator": {
+                "name": "Boiler Circulator"
+            },
+            "dhw_tap": {
+                "name": "DHW Tap",
+                "state": {
+                    "on": "On",
+                    "off": "Off"
+                }
+            }
+        },
         "button": {
             "read_technical_data": {
                 "name": "Read technical data"
@@ -97,17 +116,91 @@
                 "name": "Refresh now"
             }
         },
+        "climate": {
+            "thermostat": {
+                "name": "{room} Thermostat",
+                "state_attributes": {
+                    "mode": {
+                        "name": "BeSMART mode"
+                    },
+                    "battery_low": {
+                        "name": "Battery low"
+                    },
+                    "frost_temp": {
+                        "name": "Frost temperature"
+                    },
+                    "economy_temp": {
+                        "name": "Economy temperature"
+                    },
+                    "confort_temp": {
+                        "name": "Comfort temperature"
+                    },
+                    "updating_temp": {
+                        "name": "Temperature update in progress"
+                    }
+                }
+            }
+        },
         "sensor": {
             "battery_status": {
+                "name": "{room} Thermostat Battery Status",
                 "state": {
                     "low": "Low",
                     "good": "Good",
                     "unknown": "Unknown"
                 }
             },
+            "room_temperature": {
+                "name": "{room} Temperature"
+            },
+            "system_pressure": {
+                "name": "Boiler System Pressure"
+            },
+            "water_temperature": {
+                "name": "Boiler Water Temperature"
+            },
+            "outdoor_temperature": {
+                "name": "Outdoor Temperature"
+            },
+            "modulation": {
+                "name": "Boiler Modulation"
+            },
             "technical_data": {
                 "name": "Technical data",
                 "state_attributes": {
+                    "modulation_pct": {
+                        "name": "Modulation (%)"
+                    },
+                    "pressure_bar": {
+                        "name": "Pressure (bar)"
+                    },
+                    "flow_temperature": {
+                        "name": "Flow temperature"
+                    },
+                    "return_temperature": {
+                        "name": "Return temperature"
+                    },
+                    "flue_temperature": {
+                        "name": "Flue temperature"
+                    },
+                    "dhw_temperature": {
+                        "name": "DHW temperature"
+                    },
+                    "dhw_set_point": {
+                        "name": "DHW set point"
+                    },
+                    "heating_set_point": {
+                        "name": "Heating set point"
+                    },
+                    "dhw_flow_rate": {
+                        "name": "DHW flow rate"
+                    },
+                    "flame": {
+                        "name": "Flame"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Outdoor temperature"
+                    },
                     "high_condensation_hours": {
                         "name": "Operating hours in high-condensation mode"
                     },
@@ -116,6 +209,31 @@
                     },
                     "dhw_hours": {
                         "name": "Operating hours in DHW"
+                    },
+                    "temperature_unit": {
+                        "name": "Temperature unit"
+                    },
+                    "unsupported_endpoints": {
+                        "name": "Unsupported data"
+                    }
+                }
+            }
+        },
+        "water_heater": {
+            "water_heater": {
+                "name": "Water Heater",
+                "state_attributes": {
+                    "flame_status": {
+                        "name": "Flame status"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Outdoor temperature"
+                    },
+                    "system_pressure": {
+                        "name": "System pressure"
+                    },
+                    "previous_climate_active": {
+                        "name": "Heating active before switching off"
                     }
                 }
             }

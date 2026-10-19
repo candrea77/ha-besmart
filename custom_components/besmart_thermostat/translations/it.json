@@ -89,6 +89,25 @@
         }
     },
     "entity": {
+        "binary_sensor": {
+            "flame": {
+                "name": "Fiamma caldaia",
+                "state": {
+                    "on": "Accesa",
+                    "off": "Spenta"
+                }
+            },
+            "circulator": {
+                "name": "Circolatore caldaia"
+            },
+            "dhw_tap": {
+                "name": "Prelievo ACS",
+                "state": {
+                    "on": "In corso",
+                    "off": "Nessun prelievo"
+                }
+            }
+        },
         "button": {
             "read_technical_data": {
                 "name": "Leggi dati tecnici"
@@ -97,17 +116,91 @@
                 "name": "Aggiorna ora"
             }
         },
+        "climate": {
+            "thermostat": {
+                "name": "Termostato {room}",
+                "state_attributes": {
+                    "mode": {
+                        "name": "Modalità BeSMART"
+                    },
+                    "battery_low": {
+                        "name": "Batteria scarica"
+                    },
+                    "frost_temp": {
+                        "name": "Temperatura antigelo"
+                    },
+                    "economy_temp": {
+                        "name": "Temperatura economy"
+                    },
+                    "confort_temp": {
+                        "name": "Temperatura comfort"
+                    },
+                    "updating_temp": {
+                        "name": "Aggiornamento temperatura in corso"
+                    }
+                }
+            }
+        },
         "sensor": {
             "battery_status": {
+                "name": "Stato batteria termostato {room}",
                 "state": {
                     "low": "Bassa",
                     "good": "Buona",
                     "unknown": "Sconosciuta"
                 }
             },
+            "room_temperature": {
+                "name": "Temperatura {room}"
+            },
+            "system_pressure": {
+                "name": "Pressione impianto caldaia"
+            },
+            "water_temperature": {
+                "name": "Temperatura mandata caldaia"
+            },
+            "outdoor_temperature": {
+                "name": "Temperatura esterna"
+            },
+            "modulation": {
+                "name": "Modulazione caldaia"
+            },
             "technical_data": {
                 "name": "Dati tecnici",
                 "state_attributes": {
+                    "modulation_pct": {
+                        "name": "Modulazione (%)"
+                    },
+                    "pressure_bar": {
+                        "name": "Pressione (bar)"
+                    },
+                    "flow_temperature": {
+                        "name": "Temperatura mandata"
+                    },
+                    "return_temperature": {
+                        "name": "Temperatura ritorno"
+                    },
+                    "flue_temperature": {
+                        "name": "Temperatura fumi"
+                    },
+                    "dhw_temperature": {
+                        "name": "Temperatura ACS"
+                    },
+                    "dhw_set_point": {
+                        "name": "Setpoint ACS"
+                    },
+                    "heating_set_point": {
+                        "name": "Setpoint riscaldamento"
+                    },
+                    "dhw_flow_rate": {
+                        "name": "Portata ACS"
+                    },
+                    "flame": {
+                        "name": "Fiamma"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Temperatura esterna"
+                    },
                     "high_condensation_hours": {
                         "name": "Ore di funzionamento in regime di elevata condensazione"
                     },
@@ -116,6 +209,31 @@
                     },
                     "dhw_hours": {
                         "name": "Ore di funzionamento in sanitario"
+                    },
+                    "temperature_unit": {
+                        "name": "Unità di temperatura"
+                    },
+                    "unsupported_endpoints": {
+                        "name": "Dati non supportati"
+                    }
+                }
+            }
+        },
+        "water_heater": {
+            "water_heater": {
+                "name": "Acqua calda sanitaria",
+                "state_attributes": {
+                    "flame_status": {
+                        "name": "Stato fiamma"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Temperatura esterna"
+                    },
+                    "system_pressure": {
+                        "name": "Pressione impianto"
+                    },
+                    "previous_climate_active": {
+                        "name": "Riscaldamento attivo prima dello spegnimento"
                     }
                 }
             }

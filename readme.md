@@ -117,6 +117,27 @@ One **BeSMART WiFi box** device is created per account, with:
 
 Boiler entities are created only when the WiFi box reports a boiler.
 
+### Supported languages
+
+| Language | Setup, options, Repairs | Entity names, states, attributes |
+|---|---|---|
+| English | ✅ | ✅ |
+| Italian | ✅ | ✅ (since 0.7.1) |
+
+Entity names follow the Home Assistant language. Names are shown in the
+table above in English; in Italian they become e.g. *Termostato &lt;Stanza&gt;*,
+*Acqua calda sanitaria*, *Modulazione caldaia*, *Fiamma caldaia* (Accesa /
+Spenta), *Prelievo ACS* (In corso / Nessun prelievo). Thermostat presets
+(AUTO, MANUAL, ECO, PARTY, IDLE) are not translated yet.
+
+- **Entity ids never change on an update**: existing entities keep their
+  `entity_id`, so automations and scripts keep working. Only the displayed
+  name changes (if you renamed an entity, your name is kept).
+- On a **new** installation, Home Assistant builds the entity ids from the
+  names in its language: an Italian system gets e.g.
+  `sensor.<device>_modulazione_caldaia` instead of
+  `sensor.<device>_boiler_modulation`.
+
 ### Screenshots
 
 Taken on a real installation (Beretta Mynute X 30 C, 2 BeSMART thermostats,

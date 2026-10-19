@@ -45,11 +45,15 @@ def test_hour_counters_use_app_labels():
     base = ROOT / "custom_components" / "besmart_thermostat"
     it = json.loads((base / "translations" / "it.json").read_text())
     names = {k: v["name"] for k, v in it["entity"]["sensor"]["technical_data"]["state_attributes"].items()}
-    assert names == {
+    # PATCH 0.7.1: every attribute is translated now; the hour counters keep the app labels.
+    assert {k: names[k] for k in ("high_condensation_hours", "heating_hours", "dhw_hours")} == {
         "high_condensation_hours": "Ore di funzionamento in regime di elevata condensazione",
         "heating_hours": "Ore di funzionamento in riscaldamento",
         "dhw_hours": "Ore di funzionamento in sanitario",
     }
+    from custom_components.besmart_thermostat.sensor import TECHNICAL_ATTRIBUTE_NAMES
+
+    assert set(names) == set(TECHNICAL_ATTRIBUTE_NAMES)
     for f in ("strings.json", "translations/en.json"):
         en = json.loads((base / f).read_text())
         assert set(en["entity"]["sensor"]["technical_data"]["state_attributes"]) == set(names)
