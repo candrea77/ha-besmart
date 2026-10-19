@@ -7,12 +7,6 @@ Home Assistant integration for **Riello BeSMART** WiFi thermostats and the
 boilers connected to them (Riello, Beretta and other brands of the group),
 through the BeSMART cloud — the same service used by the official app.
 
-<!-- SCREENSHOT 1: device page with thermostat, water heater and sensors -->
-<!-- ![BeSMART device in Home Assistant](docs/images/device.png) -->
-
-<!-- SCREENSHOT 2: thermostat card / technical data attributes -->
-<!-- ![Thermostat and technical data](docs/images/technical-data.png) -->
-
 ## Features
 
 - Control of every BeSMART thermostat: target temperature, presets
@@ -140,6 +134,10 @@ issue (with a diagnostics file) so it can be added here.
   binary sensor) can stay *off* while the burner is running, e.g. during a
   DHW draw. Use **Boiler Modulation** (> 0 % means the burner is on) or the
   `flame` attribute of **Technical data** instead.
+- **Partial thermostat data:** the cloud occasionally reports a thermostat's
+  set points as 0 (or outside the limits of the official app). Those values
+  are ignored and the last valid ones are kept; a season switch is not sent
+  while the data is partial.
 - Some technical values are not available on every boiler: they are listed
   in the `unsupported_endpoints` attribute.
 - Cloud only: no local control. If the BeSMART cloud is down, the

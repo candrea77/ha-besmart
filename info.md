@@ -1,54 +1,5 @@
 ## Changes as compared to your installed version:
 
-> **0.7.0b8 is a pre-release** (release candidate for 0.7.0). Enable "Show beta versions" in HACS to install it.
-
-### Changes since 0.7.0b7
-- **Reconfigure / reauthentication / options:** fixed the warning
-  "Detected that custom integration 'besmart_thermostat' has an update
-  listener and should use it for scheduling a reload. This will stop working
-  in Home Assistant 2026.12.0". The integration no longer registers an update
-  listener: options use Home Assistant's automatic reload, reauthentication
-  and reconfigure reload the entry themselves (this also removes a double
-  reload after reauthentication).
-- CI: tests now fail on any deprecation reported by Home Assistant for this
-  integration, on both the minimum supported and the latest version.
-- No configuration changes: updating from 0.7.0b3 or later needs no migration.
-
-### Changes in 0.7.0b7
-- **Technical data:** the attribute `heat_exchanger_hours` is renamed
-  `high_condensation_hours`: the cloud counter `heat_exchanger_hours_amassed`
-  is the app's "operating hours in high-condensation mode", not a heat
-  exchanger cleaning counter. Update templates/automations that read the old
-  attribute. Hour attributes now have translated names (EN/IT).
-
-### Changes in 0.7.0b6
-- Thermostat settings are checked against the **limits of the official
-  app**, both when reading them from the cloud and before a season switch:
-  max heating set point 15–80 °C, min heating set point 10–75 °C (min ≤ max),
-  climatic curve only 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5 or 3.0,
-  sensor influence 0–20. Values outside these limits are treated like the
-  partial zeros: the last valid value is kept and no settings are written.
-
-### Changes in 0.7.0b5
-- **Partial thermostat data:** the cloud sometimes reports a thermostat's
-  set points as 0 (comfort/economy/frost temperature, min/max heating set
-  point, climatic curve), usually with `cmd_stand_status` "1", while the
-  current and target temperatures are valid. Those 0 values are no longer
-  shown in Home Assistant: the last valid value of that thermostat is kept
-  (debug log: "partial thermostat data").
-- **Season switch safety:** no settings are written if the thermostat
-  reports `cmd_stand_status` "1" or if min/max heating set point or the
-  climatic curve are 0.
-- **Read technical data:** timeout per request raised from 5 s to 10 s
-  (some endpoints always timed out on the first attempt); retries unchanged.
-
-### Changes in 0.7.0b4
-- Debug logs: thermostat and boiler ids are reduced to their last 4
-  characters (they were shown in clear in the `thermostats` and
-  `thermostat data` lines), also as keys in the diagnostics file.
-- Debug logs: the thermostat weekly program is summarized
-  ("7 days x 48 slots") instead of being printed in full on every update.
-
 ### ⚠️ Before updating — breaking / irreversible
 - **Make a Home Assistant backup first.** On the first start the BeSMART
   config entry is **migrated to a new format (version 2). The migration is
@@ -63,6 +14,8 @@
 - The BeSMART device no longer shows the WiFi box id as "Model ID"
   (model is now "BeSMART WiFi box").
 - Home Assistant **2026.7.0 or newer** is required (unchanged from 0.6).
+- Coming from **coder89/ha-besmart** (same domain)? Your entry is migrated
+  automatically; see "Switching from coder89/ha-besmart" in the README.
 
 ### New features
 - **Boiler Modulation** sensor (%), polled with the other boiler data.
@@ -70,13 +23,27 @@
 - **Refresh now** button: immediate refresh of all polled data (presses
   within 10 s, or during a refresh, are ignored).
 - **Read technical data** button and **Technical data** sensor: on-demand
-  reading of the boiler technical values (flow/return/flue temperatures, DHW
-  values, flame, operating hours in heating / DHW / high-condensation
-  mode, ...), never polled;
-  endpoints not supported by your boiler are listed in
-  `unsupported_endpoints`. The last reading survives restarts.
+  reading of the boiler technical values — flow/return/flue temperatures,
+  DHW values, flame, operating hours in heating, in DHW and in
+  high-condensation mode (`heating_hours`, `dhw_hours`,
+  `high_condensation_hours`, named as in the official app) — never polled
+  (10 s timeout, 3 attempts). Endpoints not supported by your boiler are
+  listed in `unsupported_endpoints`. The last reading survives restarts.
 - **Reconfigure** step to change the account credentials.
-- Italian translation.
+- Italian translation (setup, options, Repairs, new entities and attributes).
+
+### Reliability
+- **Partial thermostat data:** the cloud sometimes reports a thermostat's
+  set points as 0 (comfort/economy/frost temperature, min/max heating set
+  point, climatic curve), often with `cmd_stand_status` "1". These values,
+  and any value outside the limits of the official app (max heating set
+  point 15–80 °C, min 10–75 °C with min ≤ max, climatic curve 0.2–3.0 in the
+  app's steps, sensor influence 0–20), are ignored: the last valid value is
+  kept.
+- **Season switch:** no settings are written back if the thermostat data is
+  partial or outside those limits.
+- Options, reauthentication and reconfigure reload the integration the way
+  Home Assistant now requires (no deprecation warning; ready for 2026.12).
 
 ### Security fixes
 - Credentials could appear in clear in Settings ("Retrying setup: ...") and
@@ -96,12 +63,12 @@
   twice; reauthentication and reconfigure cannot switch to another account.
 - Commands are validated before being sent: thermostat temperature
   3–35 °C rounded to 0.1 °C, DHW temperature 30–60 °C (whole degrees),
-  thermostat/boiler modes, season settings (nothing is sent if the
-  thermostat settings read from the cloud are incomplete).
+  thermostat/boiler modes, season settings.
 - Response size limit (512 KB), malformed cloud data ignored, 30 s cooldown
   on "Read technical data", unused write endpoints removed.
 - CI: GitHub Actions pinned to commit SHAs, read-only token, Dependabot;
-  automated tests on the minimum supported and the latest Home Assistant.
+  automated tests on the minimum supported (2026.7) and the latest Home
+  Assistant, failing on any Home Assistant deprecation warning.
 - **Known residual risk:** the BeSMART login endpoint only accepts the
   credentials in the URL query string (POST is not supported). They travel
   over verified HTTPS and are never logged by the integration, but may be
@@ -113,10 +80,13 @@
 - A command rejected by the cloud (`status: false` / error code) is now
   reported as an error instead of a silent success.
 - Boiler binary sensors parse values like `"1.0"` as *on* (was unknown).
-- Technical data no longer uses the removed `Boilers/technical_datas`
-  endpoint (HTTP 404).
 
 ### Known limitations
 - The cloud updates the module data only about every 3 minutes.
 - The cloud's flame state (Boiler Flame) is not reliable, e.g. during a DHW
   draw: use Boiler Modulation (> 0 % = burner on) instead.
+
+### If you tested the 0.7.0 betas
+- Updating from 0.7.0b3 or later needs no migration.
+- The Technical data attribute `heat_exchanger_hours` (betas up to b6) is now
+  `high_condensation_hours`: update templates/automations that used it.
