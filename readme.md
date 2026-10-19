@@ -117,6 +117,20 @@ One **BeSMART WiFi box** device is created per account, with:
 
 Boiler entities are created only when the WiFi box reports a boiler.
 
+### Screenshots
+
+Taken on a real installation (Beretta Mynute X 30 C, 2 BeSMART thermostats,
+Home Assistant in English).
+
+| | |
+|---|---|
+| ![Thermostat](docs/images/thermostat.png) | ![Water heater](docs/images/water_heater.png) |
+| **Thermostat** — current and target temperature, heat/cool mode and BeSMART preset. | **Water heater** — domestic hot water target (30–60 °C) and work mode. |
+| ![Sensors](docs/images/sensors.png) | ![Controls](docs/images/controls.png) |
+| **Sensors** — boiler states (circulator, flame, DHW tap), modulation, pressure, water and outdoor temperature, room temperatures. | **Controls** — one climate entity per thermostat, Refresh now button and water heater. |
+| ![Diagnostic](docs/images/diagnostic.png) | |
+| **Diagnostic** — thermostat battery status, Read technical data button and Technical data sensor (time of the last reading). | |
+
 ## Tested devices
 
 - **Beretta Mynute X 30 C** with 2 BeSMART WiFi thermostats
