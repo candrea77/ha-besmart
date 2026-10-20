@@ -146,6 +146,10 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         self._last_valid_setpoints: dict[tuple[str, str], dict] = {}
         # PATCH 0.8: one lock per (wifi_box, room_id) for settings writes.
         self._settings_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        # PATCH 0.8.1: values chosen in the number entities and not yet
+        # confirmed by the polled data, per (wifi_box, room_id, field): the
+        # dynamic min/max limits of the other set point follow them.
+        self.pending_settings: dict[tuple[str, str, str], float] = {}
         # PATCH 0.7: "Refresh now" button state.
         self._manual_refresh_lock = asyncio.Lock()
         self._last_manual_refresh: float | None = None

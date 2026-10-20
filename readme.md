@@ -162,6 +162,10 @@ They work like the settings page of the official app:
   values, and a change that would cross them is refused (change the other
   value first). After a refused value the box may keep showing it until the
   page is reloaded (Home Assistant frontend);
+- the number boxes wait 1.5 s after the last change and then send a single
+  write with the final value (several clicks on the arrows are one change).
+  The box shows the chosen value at once; if the write fails it goes back
+  to the value reported by the cloud;
 - after sending, the value is read back. While the cloud is still passing
   the command to the boiler the new value can take a few minutes to show;
   if the cloud reports a different value an error is shown.

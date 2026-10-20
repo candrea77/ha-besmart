@@ -1,5 +1,21 @@
 ## Changes as compared to your installed version:
 
+## 0.8.1
+
+### Improvements
+- **Max Flow Temperature**, **Min Flow Temperature** and **Room Sensor
+  Influence** wait 1.5 s after the last change and then send a single write
+  with the final value: clicking the arrows of the box several times (e.g.
+  35 → 40) no longer sends, and applies to the boiler, every intermediate
+  value. The chosen value is shown at once and stays visible until the
+  cloud reports it (at most 5 minutes); if the write fails the box goes
+  back to the value reported by the cloud and the error is shown. The
+  Climatic Curve select is unchanged (one write per choice).
+- The Home Assistant activity log may still list the intermediate values:
+  only the final one is sent to the boiler.
+- The limits of Max/Min Flow Temperature also follow a value that is still
+  waiting to be written.
+
 ## 0.8.0
 
 ### ⚠️ New devices: one per thermostat

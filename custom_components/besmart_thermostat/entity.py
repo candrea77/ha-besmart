@@ -64,14 +64,18 @@ class BesmartThermostatSettingEntity(CoordinatorEntity[BesmartDataUpdateCoordina
             and self._value is not None
         )
 
-    async def _async_write(self, value) -> None:
-        """Write this field (read-modify-write) and refresh."""
+    def _check_online(self) -> None:
+        """Refuse a change while the boiler is offline."""
         if not self.coordinator.boiler_online(self._wifi_box, self._room_id):
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="boiler_offline",
                 translation_placeholders={"room": str(self._room_name)},
             )
+
+    async def _async_write(self, value) -> None:
+        """Write this field (read-modify-write) and refresh."""
+        self._check_online()
         await self.coordinator.async_set_thermostat_settings(
             self._wifi_box, self._room_id, self._room_name, {self.FIELD: value}
         )

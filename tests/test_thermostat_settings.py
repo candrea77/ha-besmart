@@ -15,6 +15,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.besmart_thermostat import coordinator as coordinator_module
+from custom_components.besmart_thermostat import number as number_module
 from custom_components.besmart_thermostat.api import (
     BesmartClient,
     BesmartSettingsError,
@@ -344,6 +345,8 @@ def test_boiler_online(make_coordinator, thermostat_boiler, topology_boiler, onl
 @pytest.fixture
 def settings_cloud(cloud, monkeypatch):
     monkeypatch.setattr(coordinator_module, "SETTINGS_VERIFY_DELAY", 0)
+    # 0.8.1: no debounce wait unless a test sets one.
+    monkeypatch.setattr(number_module, "SETTINGS_WRITE_DEBOUNCE", 0)
     cloud.set_route(
         "Thermostats/data",
         {"status": True, "message": {
@@ -531,3 +534,103 @@ async def test_season_change_uses_the_same_write_path(hass, settings_cloud):
     )
     (_, form), = settings_cloud.puts
     assert form["season"] == "0" and form["max_heating_set_point"] == "45.0"
+
+
+# ------------------------------------------------------------ 0.8.1 debounce
+
+MAX_FLOW = "number.living_max_flow_temperature"
+MIN_FLOW = "number.living_min_flow_temperature"
+
+
+def set_value(hass, entity_id, value):
+    return hass.services.async_call(
+        "number", "set_value", {"entity_id": entity_id, "value": value}, blocking=True,
+    )
+
+
+def with_data(cloud, **fields):
+    route = json.loads(json.dumps(cloud.routes["Thermostats/data"]))
+    route["message"].update(fields)
+    cloud.set_route("Thermostats/data", route)
+
+
+async def test_close_changes_send_a_single_put(hass, settings_cloud, monkeypatch):
+    """Arrow clicks 45 -> 46 ... 50: one PUT with 50, state shown at once."""
+    monkeypatch.setattr(number_module, "SETTINGS_WRITE_DEBOUNCE", 0.2)
+    await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(max_heating_set_point="50")])
+    calls = []
+    for value in range(46, 51):
+        calls.append(hass.async_create_task(set_value(hass, MAX_FLOW, value)))
+        await asyncio.sleep(0.02)
+        assert hass.states.get(MAX_FLOW).state == f"{value}.0"
+    assert settings_cloud.puts == []
+    await asyncio.gather(*calls)
+    (_, form), = settings_cloud.puts
+    assert form["max_heating_set_point"] == "50"
+    assert form["min_heating_set_point"] == "24.0" and form["sensor_influence"] == "10"
+    # The polled data still says 45: the written value stays visible...
+    assert hass.states.get(MAX_FLOW).state == "50.0"
+    # ...until the cloud reports it.
+    with_data(settings_cloud, max_heating_set_point="50.0")
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(MAX_FLOW).state == "50.0"
+    assert entry.runtime_data.pending_settings == {}
+
+
+async def test_debounce_is_per_entity(hass, settings_cloud, monkeypatch):
+    monkeypatch.setattr(number_module, "SETTINGS_WRITE_DEBOUNCE", 0.1)
+    await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [
+        settings(), settings(max_heating_set_point="50"),
+        settings(max_heating_set_point="50"),
+        settings(max_heating_set_point="50", sensor_influence="5"),
+    ])
+    await asyncio.gather(
+        set_value(hass, MAX_FLOW, 50),
+        set_value(hass, "number.living_room_sensor_influence", 5),
+    )
+    assert len(settings_cloud.puts) == 2
+
+
+async def test_failed_final_write_restores_the_cloud_value(hass, settings_cloud, monkeypatch):
+    monkeypatch.setattr(number_module, "SETTINGS_WRITE_DEBOUNCE", 0.1)
+    await setup_entry(hass)
+    settings_cloud.set_route("Thermostats/setting", {"status": False, "error_code": 1})
+    first = hass.async_create_task(set_value(hass, MAX_FLOW, 46))
+    await asyncio.sleep(0.02)
+    with pytest.raises(HomeAssistantError):
+        await set_value(hass, MAX_FLOW, 47)
+    await first  # superseded: no write, no error
+    assert len(settings_cloud.puts) == 1
+    assert hass.states.get(MAX_FLOW).state == "45.0"
+    assert hass.config_entries.async_entries(DOMAIN)[0].runtime_data.pending_settings == {}
+
+
+async def test_written_value_is_dropped_after_the_timeout(hass, settings_cloud, monkeypatch):
+    """The cloud never reports the value: back to the polled one."""
+    monkeypatch.setattr(number_module, "SETTINGS_CONFIRM_TIMEOUT", 0)
+    entry = await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(max_heating_set_point="50")])
+    await set_value(hass, MAX_FLOW, 50)
+    await asyncio.sleep(0.01)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(MAX_FLOW).state == "45.0"
+
+
+async def test_dynamic_limits_follow_the_pending_value(hass, settings_cloud, monkeypatch):
+    """Max lowered to 30 and not yet written: min refuses 35 at once."""
+    monkeypatch.setattr(number_module, "SETTINGS_WRITE_DEBOUNCE", 0.2)
+    await setup_entry(hass)
+    settings_cloud.set_route("thermostats/setting", [settings(), settings(max_heating_set_point="30")])
+    pending = hass.async_create_task(set_value(hass, MAX_FLOW, 30))
+    await asyncio.sleep(0.02)
+    assert hass.states.get(MIN_FLOW).attributes["max"] == 30
+    with pytest.raises(ServiceValidationError):
+        await set_value(hass, MIN_FLOW, 35)
+    await pending
+    (_, form), = settings_cloud.puts
+    assert form["max_heating_set_point"] == "30"
