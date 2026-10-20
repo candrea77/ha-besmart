@@ -1,5 +1,10 @@
 ## Changes as compared to your installed version:
 
+## 0.9.0b1 (pre-release, work in progress)
+
+### New
+- **Climatic Curve Chart** image entity for each thermostat (in progress).
+
 ## 0.8.1
 
 ### Improvements
