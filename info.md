@@ -1,6 +1,6 @@
 ## Changes as compared to your installed version:
 
-## 0.8.1b1
+## 0.8.1
 
 ### Improvements
 - **Max Flow Temperature**, **Min Flow Temperature** and **Room Sensor
@@ -11,6 +11,8 @@
   cloud reports it (at most 5 minutes); if the write fails the box goes
   back to the value reported by the cloud and the error is shown. The
   Climatic Curve select is unchanged (one write per choice).
+- The Home Assistant activity log may still list the intermediate values:
+  only the final one is sent to the boiler.
 - The limits of Max/Min Flow Temperature also follow a value that is still
   waiting to be written.
 
