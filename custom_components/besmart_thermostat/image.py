@@ -79,6 +79,9 @@ class ClimaticCurveChart(CoordinatorEntity[BesmartDataUpdateCoordinator], ImageE
             "requested_flow_temperature",
             "requested_flow_source",
             "status",
+            # PATCH 0.9 (b2): values held at the edge of the chart.
+            "outdoor_off_scale",
+            "requested_off_scale",
         }
     )
 
@@ -211,6 +214,8 @@ class ClimaticCurveChart(CoordinatorEntity[BesmartDataUpdateCoordinator], ImageE
             "requested_flow_temperature": values.requested,
             "requested_flow_source": values.requested_source,
             "status": values.status,
+            "outdoor_off_scale": curve_chart.outdoor_off_scale(values.outdoor),
+            "requested_off_scale": curve_chart.requested_off_scale(values),
         }
         return True
 

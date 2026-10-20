@@ -29,15 +29,18 @@ def texts(root):
     return [e.text for e in root.iter(f"{{{NS['svg']}}}text")]
 
 
-def selected_flows(root):
+def flow_of_y(y, axis):
+    """Flow temperature (°C) of a y coordinate on the given axis."""
+    span = axis[1] - axis[0]
+    height = curve_chart.PLOT_BOTTOM - curve_chart.PLOT_TOP
+    return axis[0] + (curve_chart.PLOT_BOTTOM - float(y)) * span / height
+
+
+def selected_flows(root, values):
     """Flow temperatures (°C) of the selected curve limited between min and max."""
     (line,) = of_class(root, "polyline", "sel")
-    span = curve_chart.FLOW_RANGE[1] - curve_chart.FLOW_RANGE[0]
-    height = curve_chart.PLOT_BOTTOM - curve_chart.PLOT_TOP
-    return [
-        curve_chart.FLOW_RANGE[0] + (curve_chart.PLOT_BOTTOM - float(p.split(",")[1])) * span / height
-        for p in line.get("points").split()
-    ]
+    axis = curve_chart.flow_axis(values)
+    return [flow_of_y(p.split(",")[1], axis) for p in line.get("points").split()]
 
 
 def test_the_table_has_the_ten_curves_of_the_app():
@@ -65,15 +68,16 @@ def test_piano_1_values():
     assert curve_chart.curve_flow(0.6, 15.3) == pytest.approx(23.34, abs=0.01)
     assert curve_chart.limit_flow(23.34, 24, 35) == 24
     root = parse(PIANO_1)
-    assert "Outdoor 15.3 °C → curve 24 °C" in texts(root)
+    assert "Outdoor 15.3 °C → curve 23.3 °C, limited to 24 °C" in texts(root)
     assert "Requested flow 26 °C (thermostat)" in texts(root)
     assert len(of_class(root, "circle", "req")) == 1
     assert len(of_class(root, "line", "reqline")) == 1
 
 
 def test_max_below_the_curve_limits_it():
-    root = parse(ChartValues(curve=1.5, max_flow=35, min_flow=20, outdoor=-10))
-    flows = selected_flows(root)
+    values = ChartValues(curve=1.5, max_flow=35, min_flow=20, outdoor=-10)
+    root = parse(values)
+    flows = selected_flows(root, values)
     assert max(flows) == pytest.approx(35, abs=0.05)
     assert curve_chart.limit_flow(curve_chart.curve_flow(1.5, -10), 20, 35) == 35
     # The free curve is still drawn (dashed) above the limit.
@@ -83,9 +87,10 @@ def test_max_below_the_curve_limits_it():
 
 
 def test_min_above_the_curve_limits_it():
-    root = parse(ChartValues(curve=0.2, max_flow=60, min_flow=30, outdoor=10))
-    assert min(selected_flows(root)) == pytest.approx(30, abs=0.05)
-    assert max(selected_flows(root)) == pytest.approx(30, abs=0.05)  # 0.2 never reaches 30
+    values = ChartValues(curve=0.2, max_flow=60, min_flow=30, outdoor=10)
+    root = parse(values)
+    assert min(selected_flows(root, values)) == pytest.approx(30, abs=0.05)
+    assert max(selected_flows(root, values)) == pytest.approx(30, abs=0.05)  # 0.2 never reaches 30
     assert curve_chart.limit_flow(curve_chart.curve_flow(0.2, 10), 30, 60) == 30
 
 
@@ -210,3 +215,230 @@ def test_every_text_is_xml_escaped(monkeypatch):
     root = ET.fromstring(svg)
     assert nasty in texts(root)
     assert "<script>" not in svg
+
+
+# ----------------------------------------------- 0.9.0b2: axis, off scale
+
+SVG = "{http://www.w3.org/2000/svg}"
+
+
+def coordinates(root):
+    """Every (x, y) drawn: lines, polylines, polygons, circles (with radius), texts."""
+    result = []
+    for e in root.iter():
+        tag = e.tag.removeprefix(SVG)
+        if tag == "line":
+            result += [(float(e.get("x1")), float(e.get("y1"))), (float(e.get("x2")), float(e.get("y2")))]
+        elif tag in ("polyline", "polygon"):
+            result += [tuple(map(float, p.split(","))) for p in e.get("points").split()]
+        elif tag == "circle":
+            cx, cy, r = float(e.get("cx")), float(e.get("cy")), float(e.get("r"))
+            result += [(cx - r, cy - r), (cx + r, cy + r)]
+        elif tag == "text":
+            result.append((float(e.get("x")), float(e.get("y"))))
+    return result
+
+
+def assert_inside(root):
+    for x, y in coordinates(root):
+        assert 0 <= x <= curve_chart.WIDTH and 0 <= y <= curve_chart.HEIGHT, (x, y)
+    # Lines and curves of the chart stay in the plot area (they are clipped too).
+    for e in root.iter():
+        if e.tag.removeprefix(SVG) == "polyline" or e.get("class") in ("max", "min"):
+            assert e.get("clip-path") == "url(#plot)"
+            points = (
+                [tuple(map(float, p.split(","))) for p in e.get("points").split()]
+                if e.get("points") else
+                [(float(e.get("x1")), float(e.get("y1"))), (float(e.get("x2")), float(e.get("y2")))]
+            )
+            for x, y in points:
+                assert curve_chart.PLOT_LEFT - 0.05 <= x <= curve_chart.PLOT_RIGHT + 0.05, (x, e.get("class"))
+                assert curve_chart.PLOT_TOP - 0.05 <= y <= curve_chart.PLOT_BOTTOM + 0.05, (y, e.get("class"))
+
+
+def values(**kwargs):
+    return ChartValues(**{**PIANO_1.__dict__, **kwargs})
+
+
+@pytest.mark.parametrize(
+    ("max_flow", "min_flow", "axis"),
+    [
+        (15, 10, (10, 50)),
+        (35, 24, (20, 50)),
+        (40, 24, (20, 60)),
+        (45, 30, (20, 60)),
+        (80, 30, (20, 100)),
+        (35, 15, (10, 50)),
+        (None, 24, (20, 100)),
+        (None, 12, (10, 100)),
+        (None, None, (20, 100)),
+    ],
+)
+def test_flow_axis(max_flow, min_flow, axis):
+    assert curve_chart.flow_axis(values(max_flow=max_flow, min_flow=min_flow)) == axis
+
+
+def test_flow_axis_unsupported_unit():
+    assert curve_chart.flow_axis(values(max_flow=35, status=curve_chart.STATUS_UNSUPPORTED_UNIT)) == (20, 100)
+
+
+@pytest.mark.parametrize(
+    ("max_flow", "min_flow", "step"),
+    [(35, 24, 5), (15, 10, 5), (40, 24, 5), (80, 30, 10), (None, None, 10)],
+)
+def test_grid_step(max_flow, min_flow, step):
+    root = parse(values(max_flow=max_flow, min_flow=min_flow))
+    bottom, top = curve_chart.flow_axis(values(max_flow=max_flow, min_flow=min_flow))
+    labels = [int(t.text) for t in root.iter(f"{SVG}text") if t.get("class") == "axis" and float(t.get("x")) == curve_chart.PLOT_LEFT - 4]
+    assert labels == list(range(int(bottom), int(top) + 1, step))
+
+
+@pytest.mark.parametrize("curve", CLIMATIC_CURVES)
+@pytest.mark.parametrize(("max_flow", "min_flow"), [(35, 24), (15, 10), (80, 30), (35, 12)])
+def test_curves_on_every_axis(curve, max_flow, min_flow):
+    vals = values(curve=curve, max_flow=max_flow, min_flow=min_flow)
+    root = parse(vals)
+    axis = curve_chart.flow_axis(vals)
+    assert_inside(root)
+    for line, (table_curve, points) in zip(of_class(root, "polyline", "curve"), curve_chart.CURVE_TABLE.items()):
+        first = line.get("points").split()[0]
+        assert flow_of_y(first.split(",")[1], axis) == pytest.approx(points[0], abs=0.05), table_curve
+        assert min(flow_of_y(p.split(",")[1], axis) for p in line.get("points").split()) >= 20 - 0.05
+    flows = selected_flows(root, vals)
+    assert max(flows) <= max_flow + 0.05 and min(flows) >= min_flow - 0.05
+    if max_flow == 15:
+        assert flows == pytest.approx([15] * len(flows), abs=0.05)
+
+
+@pytest.mark.parametrize(("max_flow", "min_flow"), [(35, 24), (40, 24), (80, 30), (None, None)])
+def test_every_curve_has_a_label_without_overlaps(max_flow, min_flow):
+    root = parse(values(max_flow=max_flow, min_flow=min_flow))
+    labels = [t for t in root.iter(f"{SVG}text") if t.get("class") == "clabel"]
+    assert sorted(t.text for t in labels) == sorted(f"{c:g}" for c in CLIMATIC_CURVES)
+    boxes = []
+    for t in labels:
+        x, y, width = float(t.get("x")), float(t.get("y")), 5.5 * len(t.text)
+        if t.get("text-anchor") == "middle":
+            x -= width / 2
+        boxes.append((x, y - 8, x + width, y))
+    for i, a in enumerate(boxes):
+        for b in boxes[i + 1:]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1], (a, b)
+
+
+def test_piano_1_points_are_apart():
+    root = parse(PIANO_1)
+    (work,), (req,) = of_class(root, "circle", "work"), of_class(root, "circle", "req")
+    assert abs(float(work.get("cy")) - float(req.get("cy"))) >= 10
+    assert_inside(root)
+
+
+@pytest.mark.parametrize(
+    ("language", "above", "below"),
+    [
+        ("en", "Outdoor 23.1 °C (off scale, value at 20 °C) → curve 20 °C, limited to 24 °C",
+         "Outdoor -18 °C (off scale, value at -16 °C) → curve 38.5 °C, limited to 35 °C"),
+        ("it", "T esterna 23.1 °C (fuori scala, valore a 20 °C) → curva 20 °C, limitata a 24 °C",
+         "T esterna -18 °C (fuori scala, valore a -16 °C) → curva 38.5 °C, limitata a 35 °C"),
+    ],
+)
+def test_outdoor_off_scale(language, above, below):
+    for outdoor, text, edge_x, direction in (
+        (23.1, above, curve_chart.PLOT_LEFT, -1), (-18, below, curve_chart.PLOT_RIGHT, 1),
+    ):
+        vals = values(outdoor=outdoor, language=language)
+        root = parse(vals)
+        assert_inside(root)
+        assert curve_chart.outdoor_off_scale(outdoor)
+        assert not of_class(root, "circle", "work")
+        (point,) = of_class(root, "circle", "workoff")
+        assert float(point.get("cx")) == pytest.approx(edge_x)
+        triangles = of_class(root, "polygon", "offscale")
+        assert len(triangles) == 1
+        tip, base = (float(p.split(",")[0]) for p in triangles[0].get("points").split()[:2])
+        # The tip points outwards (left above 20 °C, right below -16 °C).
+        assert (tip - base) * direction > 0
+        assert text in texts(root)
+    # The curve value at the edge comes from the table, never extrapolated.
+    assert curve_chart.curve_flow(0.6, 23.1) == 20.0
+    assert curve_chart.curve_flow(0.6, -18) == 38.5
+    assert curve_chart.curve_flow(3.0, -30) == 121.0
+
+
+def test_outdoor_on_the_edges_is_not_off_scale():
+    for outdoor in (20, -16):
+        root = parse(values(outdoor=outdoor))
+        assert not curve_chart.outdoor_off_scale(outdoor)
+        assert not of_class(root, "polygon", "offscale") and of_class(root, "circle", "work")
+        assert not any("off scale" in (t or "") for t in texts(root))
+
+
+@pytest.mark.parametrize(
+    ("language", "requested", "max_flow", "min_flow", "direction", "text"),
+    [
+        ("en", 60, 35, 24, "up", "Requested flow 60 °C, off scale (thermostat)"),
+        ("it", 60, 35, 24, "up", "Mandata richiesta 60 °C, fuori scala (termostato)"),
+        ("en", 15, 35, 24, "down", "Requested flow 15 °C, off scale (thermostat)"),
+        ("it", 15, 35, 24, "down", "Mandata richiesta 15 °C, fuori scala (termostato)"),
+        ("en", 15, 35, 12, None, "Requested flow 15 °C (thermostat)"),
+        ("it", 15, 35, 12, None, "Mandata richiesta 15 °C (termostato)"),
+    ],
+)
+def test_requested_off_scale(language, requested, max_flow, min_flow, direction, text):
+    vals = values(requested=requested, max_flow=max_flow, min_flow=min_flow, language=language)
+    root = parse(vals)
+    assert_inside(root)
+    assert text in texts(root)
+    assert curve_chart.requested_off_scale(vals) is (direction is not None)
+    (req,) = of_class(root, "circle", "req")
+    triangles = of_class(root, "polygon", "offscale")
+    if direction is None:
+        assert not triangles
+        return
+    (triangle,) = triangles
+    edge = curve_chart.PLOT_TOP if direction == "up" else curve_chart.PLOT_BOTTOM
+    assert float(req.get("cy")) == pytest.approx(edge)
+    tip_y = float(triangle.get("points").split()[0].split(",")[1])
+    base_y = float(triangle.get("points").split()[1].split(",")[1])
+    assert (tip_y < base_y) is (direction == "up")
+
+
+def test_both_off_scale():
+    root = parse(values(outdoor=25, requested=70, language="it"))
+    assert_inside(root)
+    assert len(of_class(root, "polygon", "offscale")) == 2
+    assert any("T esterna 25 °C (fuori scala" in t for t in texts(root))
+    assert any("Mandata richiesta 70 °C, fuori scala" in t for t in texts(root))
+
+
+@pytest.mark.parametrize(
+    ("language", "kwargs", "text"),
+    [
+        ("en", {}, "Outdoor 15.3 °C → curve 23.3 °C, limited to 24 °C"),
+        ("it", {}, "T esterna 15.3 °C → curva 23.3 °C, limitata a 24 °C"),
+        ("en", {"outdoor": -10, "curve": 1.5}, "Outdoor -10 °C → curve 67.8 °C, limited to 35 °C"),
+        ("it", {"outdoor": -10, "curve": 1.5}, "T esterna -10 °C → curva 67.8 °C, limitata a 35 °C"),
+        ("en", {"outdoor": 4, "max_flow": 60, "min_flow": 20}, "Outdoor 4 °C → curve 30.2 °C"),
+        ("it", {"outdoor": 4, "max_flow": 60, "min_flow": 20}, "T esterna 4 °C → curva 30.2 °C"),
+        # Same value once rounded: never "limited to" the shown value.
+        ("en", {"outdoor": 4, "max_flow": 60, "min_flow": 30.2}, "Outdoor 4 °C → curve 30.2 °C"),
+        ("it", {"outdoor": 4, "max_flow": 60, "min_flow": 30.2}, "T esterna 4 °C → curva 30.2 °C"),
+    ],
+)
+def test_working_point_legend(language, kwargs, text):
+    root = parse(values(language=language, **kwargs))
+    assert text in texts(root)
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {}, {"outdoor": 23.1}, {"outdoor": -18}, {"requested": 60}, {"requested": 15},
+        {"outdoor": 25, "requested": 70}, {"max_flow": 15, "min_flow": 10, "requested": 12},
+        {"max_flow": None, "min_flow": None}, {"status": curve_chart.STATUS_BOILER_OFFLINE},
+        {"status": curve_chart.STATUS_UNSUPPORTED_UNIT}, {"outdoor": None}, {"curve": None},
+    ],
+)
+def test_nothing_outside_the_image(language, kwargs):
+    assert_inside(parse(values(language=language, **kwargs)))

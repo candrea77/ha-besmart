@@ -183,6 +183,20 @@
                             "unsupported_unit": "Unsupported unit",
                             "boiler_offline": "Boiler unreachable"
                         }
+                    },
+                    "outdoor_off_scale": {
+                        "name": "Outdoor temperature off scale",
+                        "state": {
+                            "true": "Yes",
+                            "false": "No"
+                        }
+                    },
+                    "requested_off_scale": {
+                        "name": "Requested flow off scale",
+                        "state": {
+                            "true": "Yes",
+                            "false": "No"
+                        }
                     }
                 }
             }

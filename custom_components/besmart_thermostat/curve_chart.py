@@ -10,6 +10,7 @@ entity (image.py) collects the values, this module only computes and draws.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
@@ -35,9 +36,13 @@ CURVE_TABLE: dict[float, tuple[float, ...]] = {
 CURVES = tuple(CURVE_TABLE)
 CURVE_RANGE = (CURVES[0], CURVES[-1])
 
-# Chart axes.
+# Chart axes. PATCH 0.9 (b2): the flow axis follows the max/min flow
+# temperature (see flow_axis()); FLOW_RANGE is the axis without them.
 OUTDOOR_RANGE = (20.0, -16.0)
 FLOW_RANGE = (20.0, 100.0)
+FLOW_AXIS_LOW = 10.0  # bottom of the axis when min or max is below 20 °C
+FLOW_AXIS_MARGIN = 15.0  # top of the axis: max + 15 ...
+FLOW_AXIS_MIN_TOP = 50.0  # ... at least 50, rounded up to a multiple of 10
 # A requested flow temperature outside these limits is not plausible (e.g. the
 # 5 °C the thermostat reports when it is not calling for heat).
 PLAUSIBLE_FLOW = (10.0, 100.0)
@@ -70,6 +75,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "no_heat_request": "no heat request",
         "boiler_offline": "boiler unreachable",
         "unsupported_unit": "unsupported unit",
+        "limited_to": "limited to",
+        "off_scale": "off scale",
+        "value_at": "value at",
         "note": "Indicative, from the Riello manual: T flow = T curve + (CLI × InFL × ΔT room)",
     },
     "it": {
@@ -88,6 +96,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "no_heat_request": "nessuna richiesta di calore",
         "boiler_offline": "caldaia non raggiungibile",
         "unsupported_unit": "unità non supportata",
+        "limited_to": "limitata a",
+        "off_scale": "fuori scala",
+        "value_at": "valore a",
         "note": "Indicativo, dal manuale Riello: T mand risc = T mand curva + (CLI × InFL × ΔT amb)",
     },
 }
@@ -206,10 +217,44 @@ def limit_flow(flow: float | None, min_flow: float | None, max_flow: float | Non
 
 # ----------------------------------------------------------------- drawing
 
+
+def flow_axis(values: ChartValues) -> tuple[float, float]:
+    """PATCH 0.9 (b2): flow axis (bottom, top) in °C.
+
+    Top: max(max + 15, 50) rounded up to a multiple of 10 (100 without a
+    max). Bottom: 10 when the min or max flow is below 20 °C (the app allows
+    min 10 and max 15), else 20. Unsupported unit: 20-100.
+    """
+    if values.status == STATUS_UNSUPPORTED_UNIT:
+        return FLOW_RANGE
+    top = FLOW_RANGE[1]
+    if values.max_flow is not None:
+        top = min(FLOW_RANGE[1], math.ceil(max(values.max_flow + FLOW_AXIS_MARGIN, FLOW_AXIS_MIN_TOP) / 10) * 10)
+    low = [v for v in (values.min_flow, values.max_flow) if v is not None]
+    bottom = FLOW_AXIS_LOW if low and min(low) < FLOW_RANGE[0] else FLOW_RANGE[0]
+    return float(bottom), float(top)
+
+
+def outdoor_off_scale(outdoor: float | None) -> bool:
+    """Outdoor temperature outside the x axis (above 20 or below -16 °C)."""
+    return outdoor is not None and not OUTDOOR_RANGE[1] <= outdoor <= OUTDOOR_RANGE[0]
+
+
+def requested_off_scale(values: ChartValues) -> bool:
+    """Requested flow outside the flow axis."""
+    if values.requested is None:
+        return False
+    bottom, top = flow_axis(values)
+    return not bottom <= values.requested <= top
+
+
 WIDTH, HEIGHT = 480, 316
 PLOT_LEFT, PLOT_RIGHT = 36.0, 444.0
-PLOT_TOP, PLOT_BOTTOM = 20.0, 216.0
+PLOT_TOP, PLOT_BOTTOM = 26.0, 210.0
 _SAMPLE_STEP = 0.5  # °C between the points of a drawn curve
+_LABEL_GAP = 10.0  # px between curve labels
+_LEGEND_TOP = 240.0
+_LEGEND_ROW = 15.0
 
 _STYLE = (
     ".bg{fill:#f6f7f9;stroke:#d0d4da}"
@@ -221,27 +266,26 @@ _STYLE = (
     ".clabel{fill:#8a9099;font-size:9px}"
     ".sel{fill:none;stroke:#e8590c;stroke-width:3;stroke-linejoin:round}"
     ".selfree{fill:none;stroke:#e8590c;stroke-width:1.2;stroke-dasharray:4 3;opacity:.45}"
-    ".sellabel{fill:#e8590c;font-size:10px;font-weight:bold}"
     ".max{stroke:#d63939;stroke-width:1.6}"
     ".min{stroke:#2f7ed8;stroke-width:1.6}"
     ".work{fill:#e8590c;stroke:#fff;stroke-width:1.5}"
+    ".workoff{fill:none;stroke:#e8590c;stroke-width:2}"
     ".req{fill:none;stroke:#8e44ad;stroke-width:2.2}"
     ".reqline{stroke:#8e44ad;stroke-width:1.2;stroke-dasharray:3 2}"
+    ".offscale{fill:#1f2328}"
     ".msg{fill:#1f2328;font-size:13px;font-weight:bold}"
     "@media (prefers-color-scheme:dark){"
     ".bg{fill:#1e2126;stroke:#3a4048}"
     ".grid{stroke:#2e333a}"
     ".axis,.note{fill:#a3aab4}"
-    ".txt,.msg{fill:#e6e8eb}"
+    ".txt,.msg,.offscale{fill:#e6e8eb}"
     ".curve{stroke:#59606a}"
     ".clabel{fill:#8b929c}"
-    ".sel,.selfree{stroke:#ffa94d}"
-    ".sellabel{fill:#ffa94d}"
+    ".sel,.selfree,.workoff{stroke:#ffa94d}"
     ".max{stroke:#ff6b6b}"
     ".min{stroke:#5aa9ff}"
     ".work{fill:#ffa94d;stroke:#1e2126}"
-    ".req{stroke:#c39bd3}"
-    ".reqline{stroke:#c39bd3}"
+    ".req,.reqline{stroke:#c39bd3}"
     "}"
 )
 
@@ -258,14 +302,17 @@ def _num(value: float) -> str:
 
 
 def _x(outdoor: float) -> float:
+    """x of an outdoor temperature, held at the edges of the axis."""
     span = OUTDOOR_RANGE[0] - OUTDOOR_RANGE[1]
     outdoor = min(max(outdoor, OUTDOOR_RANGE[1]), OUTDOOR_RANGE[0])
     return PLOT_LEFT + (OUTDOOR_RANGE[0] - outdoor) * (PLOT_RIGHT - PLOT_LEFT) / span
 
 
-def _y(flow: float) -> float:
-    span = FLOW_RANGE[1] - FLOW_RANGE[0]
-    return PLOT_BOTTOM - (flow - FLOW_RANGE[0]) * (PLOT_BOTTOM - PLOT_TOP) / span
+def _y(flow: float, axis: tuple[float, float]) -> float:
+    """y of a flow temperature, held at the edges of the axis."""
+    bottom, top = axis
+    flow = min(max(flow, bottom), top)
+    return PLOT_BOTTOM - (flow - bottom) * (PLOT_BOTTOM - PLOT_TOP) / (top - bottom)
 
 
 def _text(x: float, y: float, content, css: str, anchor: str = "start") -> str:
@@ -275,9 +322,22 @@ def _text(x: float, y: float, content, css: str, anchor: str = "start") -> str:
     )
 
 
-def _polyline(points: list[tuple[float, float]], css: str) -> str:
-    coords = " ".join(f"{_x(t):.1f},{_y(f):.1f}" for t, f in points)
-    return f'<polyline class="{_esc(css)}" points="{_esc(coords)}"/>'
+def _polyline(points: list[tuple[float, float]], css: str, axis) -> str:
+    coords = " ".join(f"{_x(t):.1f},{_y(f, axis):.1f}" for t, f in points)
+    return f'<polyline class="{_esc(css)}" points="{_esc(coords)}" clip-path="url(#plot)"/>'
+
+
+def _triangle(x: float, y: float, direction: str) -> str:
+    """"Off scale" mark: a small triangle pointing left/right/up/down."""
+    tip, base, half = 6.5, 13.0, 4.0
+    shapes = {
+        "left": ((x + tip, y), (x + base, y - half), (x + base, y + half)),
+        "right": ((x - tip, y), (x - base, y - half), (x - base, y + half)),
+        "up": ((x, y + tip), (x - half, y + base), (x + half, y + base)),
+        "down": ((x, y - tip), (x - half, y - base), (x + half, y - base)),
+    }
+    coords = " ".join(f"{px:.1f},{py:.1f}" for px, py in shapes[direction])
+    return f'<polygon class="offscale" points="{_esc(coords)}"/>'
 
 
 def _samples(points: tuple[float, ...]) -> list[tuple[float, float]]:
@@ -290,9 +350,8 @@ def _samples(points: tuple[float, ...]) -> list[tuple[float, float]]:
     return result
 
 
-def _visible(samples: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Cut a curve where it leaves the chart (100 °C)."""
-    top = FLOW_RANGE[1]
+def _visible(samples: list[tuple[float, float]], top: float) -> list[tuple[float, float]]:
+    """Cut a curve where it leaves the chart at the top."""
     result = []
     for i, (outdoor, flow) in enumerate(samples):
         if flow <= top:
@@ -305,10 +364,12 @@ def _visible(samples: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return result
 
 
-def _grid() -> list[str]:
+def _grid(axis: tuple[float, float]) -> list[str]:
+    bottom, top = axis
+    step = 5 if top - bottom <= 40 else 10
     parts = []
-    for flow in range(int(FLOW_RANGE[0]), int(FLOW_RANGE[1]) + 1, 10):
-        y = _y(flow)
+    for flow in range(int(bottom), int(top) + 1, step):
+        y = _y(flow, axis)
         parts.append(f'<line class="grid" x1="{PLOT_LEFT:.1f}" y1="{y:.1f}" x2="{PLOT_RIGHT:.1f}" y2="{y:.1f}"/>')
         parts.append(_text(PLOT_LEFT - 4, y + 3, flow, "axis", "end"))
     for outdoor in range(int(OUTDOOR_RANGE[0]), int(OUTDOOR_RANGE[1]) - 1, -4):
@@ -319,19 +380,62 @@ def _grid() -> list[str]:
     return parts
 
 
+def _curve_labels(ends: list[tuple[float, float, str]], axis) -> list[str]:
+    """Labels of the grey curves: above the top edge where a curve leaves
+    the chart (a second row when two would overlap), else on the right."""
+    top_labels = sorted((_x(t), label) for t, f, label in ends if f >= axis[1] - 1e-6)
+    right_labels = sorted((_y(f, axis), label) for t, f, label in ends if f < axis[1] - 1e-6)
+    parts = []
+    last_x = {0: -1e9, 1: -1e9}
+    for x, label in top_labels:
+        width = 5.5 * len(label)
+        row = 0 if x - width / 2 >= last_x[0] + 4 else 1
+        last_x[row] = x + width / 2
+        parts.append(_text(x, PLOT_TOP - 3 - row * 9, label, "clabel", "middle"))
+    last_y = -1e9
+    for y, label in right_labels:
+        y = max(y, last_y + _LABEL_GAP)
+        last_y = y
+        parts.append(_text(PLOT_RIGHT + 3, min(y, PLOT_BOTTOM) + 3, label, "clabel"))
+    return parts
+
+
+def legend_outdoor(values: ChartValues, texts: dict, work: float | None, flow: float | None) -> str:
+    """Working point: real outdoor temperature, curve value, limit if any."""
+    text = f"{texts['outdoor']} {_num(values.outdoor)} °C"
+    if outdoor_off_scale(values.outdoor):
+        edge = OUTDOOR_RANGE[0] if values.outdoor > OUTDOOR_RANGE[0] else OUTDOOR_RANGE[1]
+        text += f" ({texts['off_scale']}, {texts['value_at']} {_num(edge)} °C)"
+    if flow is not None:
+        text += f" → {texts['curve_flow']} {_num(flow)} °C"
+        if work is not None and _num(work) != _num(flow):
+            text += f", {texts['limited_to']} {_num(work)} °C"
+    return text
+
+
 def render_svg(values: ChartValues, warn_key: str = "") -> str:
-    """Draw the chart. Missing values are simply not drawn (never a 0 line)."""
+    """Draw the chart. Missing values are simply not drawn (never a 0 line);
+    nothing is drawn outside the image, values off the axes are held at the
+    edge with an "off scale" mark."""
     texts = TEXTS.get(values.language, TEXTS["en"])
+    axis = flow_axis(values)
+    plot_w, plot_h = PLOT_RIGHT - PLOT_LEFT, PLOT_BOTTOM - PLOT_TOP
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" '
         f'viewBox="0 0 {WIDTH} {HEIGHT}" font-family="sans-serif">',
         f"<style>{_STYLE}</style>",
+        # The clip area is 2 px larger, so lines on the edges (e.g. min
+        # 10 °C on an axis from 10) stay visible.
+        f'<defs><clipPath id="plot"><rect x="{PLOT_LEFT - 2:.1f}" y="{PLOT_TOP - 2:.1f}" '
+        f'width="{plot_w + 4:.1f}" height="{plot_h + 4:.1f}"/></clipPath></defs>',
         f'<rect class="bg" x="0.5" y="0.5" width="{WIDTH - 1}" height="{HEIGHT - 1}" rx="10"/>',
-        *_grid(),
-        _text(PLOT_LEFT - 4, PLOT_TOP - 8, texts["flow_axis"], "axis", "start"),
+        *_grid(axis),
+        _text(4, 10, texts["flow_axis"], "axis", "start"),
         _text(PLOT_RIGHT, PLOT_BOTTOM + 24, texts["outdoor_axis"], "axis", "end"),
     ]
-    legend: list[str] = []
+    # Legend rows: (column, row, mark, text); columns 0 and 1 of the 2x2
+    # grid, column None = full width.
+    legend: list[tuple[int | None, int, str | None, str]] = []
 
     def entry(label: str, value: str | None) -> str:
         return f"{label} {value}" if value is not None else f"{label}: {texts['not_available']}"
@@ -339,90 +443,103 @@ def render_svg(values: ChartValues, warn_key: str = "") -> str:
     if values.status == STATUS_UNSUPPORTED_UNIT:
         mid_x = (PLOT_LEFT + PLOT_RIGHT) / 2
         parts.append(_text(mid_x, (PLOT_TOP + PLOT_BOTTOM) / 2, texts["unsupported_unit"], "msg", "middle"))
-        legend.append(texts["unsupported_unit"])
+        legend.append((None, 0, None, texts["unsupported_unit"]))
     else:
         # All the curves of the manual, light grey, with their label.
+        ends = []
         for curve, points in CURVE_TABLE.items():
-            visible = _visible(_samples(points))
-            parts.append(_polyline(visible, "curve"))
-            end_t, end_f = visible[-1]
-            if end_f >= FLOW_RANGE[1] - 1e-6:
-                parts.append(_text(_x(end_t), PLOT_TOP - 3, _num(curve), "clabel", "middle"))
-            else:
-                parts.append(_text(PLOT_RIGHT + 3, _y(end_f) + 3, _num(curve), "clabel"))
+            visible = _visible(_samples(points), axis[1])
+            parts.append(_polyline(visible, "curve", axis))
+            ends.append((*visible[-1], _num(curve)))
+        parts.extend(_curve_labels(ends, axis))
 
-        # Max / min flow set points: horizontal lines (only valid values).
+        # Max / min flow set points: horizontal lines (only valid values,
+        # always inside the axis by construction).
         for flow, css in ((values.max_flow, "max"), (values.min_flow, "min")):
-            if flow is not None and FLOW_RANGE[0] <= flow <= FLOW_RANGE[1]:
-                y = _y(flow)
-                parts.append(f'<line class="{css}" x1="{PLOT_LEFT:.1f}" y1="{y:.1f}" x2="{PLOT_RIGHT:.1f}" y2="{y:.1f}"/>')
+            if flow is not None:
+                y = _y(flow, axis)
+                parts.append(
+                    f'<line class="{css}" x1="{PLOT_LEFT:.1f}" y1="{y:.1f}" '
+                    f'x2="{PLOT_RIGHT:.1f}" y2="{y:.1f}" clip-path="url(#plot)"/>'
+                )
 
         # Selected curve: free (dashed) and limited between min and max.
         points = curve_points(values.curve, warn_key) if values.curve is not None else None
         if points is not None:
             samples = _samples(points)
-            parts.append(_polyline(_visible(samples), "selfree"))
+            parts.append(_polyline(_visible(samples, axis[1]), "selfree", axis))
             limited = [(t, limit_flow(f, values.min_flow, values.max_flow)) for t, f in samples]
-            parts.append(_polyline(_visible(limited), "sel"))
+            parts.append(_polyline(_visible(limited, axis[1]), "sel", axis))
 
-        legend.append(entry(texts["curve"], _num(values.curve) if values.curve is not None else None))
-        legend.append(entry(texts["max"], f"{_num(values.max_flow)} °C" if values.max_flow is not None else None))
-        legend.append(entry(texts["min"], f"{_num(values.min_flow)} °C" if values.min_flow is not None else None))
-        legend.append(entry(texts["influence"], _num(values.influence) if values.influence is not None else None))
+        legend.append((0, 0, "sel", entry(texts["curve"], _num(values.curve) if values.curve is not None else None)))
+        legend.append((1, 0, None, entry(texts["influence"], _num(values.influence) if values.influence is not None else None)))
+        legend.append((0, 1, "max", entry(texts["max"], f"{_num(values.max_flow)} °C" if values.max_flow is not None else None)))
+        legend.append((1, 1, "min", entry(texts["min"], f"{_num(values.min_flow)} °C" if values.min_flow is not None else None)))
 
         if values.status == STATUS_BOILER_OFFLINE:
-            legend.append(f"{texts['outdoor']}: {texts['boiler_offline']}")
-            legend.append(f"{texts['requested']}: {texts['boiler_offline']}")
+            legend.append((None, 2, None, f"{texts['outdoor']}: {texts['boiler_offline']}"))
+            legend.append((None, 3, None, f"{texts['requested']}: {texts['boiler_offline']}"))
         else:
-            work = None
+            work = flow = None
+            outdoor_off = outdoor_off_scale(values.outdoor)
             if values.outdoor is None:
-                legend.append(entry(texts["outdoor"], None))
+                legend.append((None, 2, "work", entry(texts["outdoor"], None)))
             else:
+                # Off the axis: the value at the edge of the table, never
+                # extrapolated (_interp holds the table ends).
                 flow = curve_flow(values.curve, values.outdoor, warn_key) if points is not None else None
                 work = limit_flow(flow, values.min_flow, values.max_flow)
-                text = f"{texts['outdoor']} {_num(values.outdoor)} °C"
-                if work is not None:
-                    text += f" → {texts['curve_flow']} {_num(work)} °C"
-                legend.append(text)
+                legend.append((None, 2, "workoff" if outdoor_off else "work",
+                               legend_outdoor(values, texts, work, flow)))
+            requested_off = requested_off_scale(values)
             if values.requested is not None:
                 source = texts.get(f"source_{values.requested_source}")
                 text = f"{texts['requested']} {_num(values.requested)} °C"
-                legend.append(f"{text} ({source})" if source else text)
+                if requested_off:
+                    text += f", {texts['off_scale']}"
+                legend.append((None, 3, "req", f"{text} ({source})" if source else text))
             elif values.heat_request:
-                legend.append(entry(texts["requested"], None))
+                legend.append((None, 3, "req", entry(texts["requested"], None)))
             else:
-                legend.append(f"{texts['requested']}: {texts['no_heat_request']}")
+                legend.append((None, 3, None, f"{texts['requested']}: {texts['no_heat_request']}"))
 
             if values.outdoor is not None:
                 x = _x(values.outdoor)
                 if values.requested is not None:
+                    y_req = _y(values.requested, axis)
                     if work is not None:
                         parts.append(
-                            f'<line class="reqline" x1="{x:.1f}" y1="{_y(work):.1f}" '
-                            f'x2="{x:.1f}" y2="{_y(min(values.requested, FLOW_RANGE[1])):.1f}"/>'
+                            f'<line class="reqline" x1="{x:.1f}" y1="{_y(work, axis):.1f}" '
+                            f'x2="{x:.1f}" y2="{y_req:.1f}"/>'
                         )
-                    parts.append(
-                        f'<circle class="req" cx="{x:.1f}" '
-                        f'cy="{_y(min(values.requested, FLOW_RANGE[1])):.1f}" r="5"/>'
-                    )
+                    parts.append(f'<circle class="req" cx="{x:.1f}" cy="{y_req:.1f}" r="5"/>')
+                    if requested_off:
+                        parts.append(_triangle(x, y_req, "up" if values.requested > axis[1] else "down"))
                 if work is not None:
-                    parts.append(f'<circle class="work" cx="{x:.1f}" cy="{_y(work):.1f}" r="4.5"/>')
+                    y_work = _y(work, axis)
+                    css = "workoff" if outdoor_off else "work"
+                    parts.append(f'<circle class="{css}" cx="{x:.1f}" cy="{y_work:.1f}" r="4.5"/>')
+                    if outdoor_off:
+                        parts.append(_triangle(x, y_work, "left" if values.outdoor > OUTDOOR_RANGE[0] else "right"))
+                elif outdoor_off:
+                    parts.append(_triangle(x, (PLOT_TOP + PLOT_BOTTOM) / 2,
+                                           "left" if values.outdoor > OUTDOOR_RANGE[0] else "right"))
 
-    # Legend: settings on the left (4 rows), outdoor temperature and
-    # requested flow on the right; a colour mark before each entry.
+    # Legend: a 2x2 grid for the settings, then full-width rows for the
+    # working point and the requested flow; a colour mark before each entry.
     marks = {
-        0: '<line class="sel mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
-        1: '<line class="max mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
-        2: '<line class="min mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
-        4: '<circle class="work mark" cx="{cx}" cy="{y}" r="4"/>',
-        5: '<circle class="req mark" cx="{cx}" cy="{y}" r="4"/>',
+        "sel": '<line class="sel mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
+        "max": '<line class="max mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
+        "min": '<line class="min mark" x1="{x}" y1="{y}" x2="{x2}" y2="{y}"/>',
+        "work": '<circle class="work mark" cx="{cx}" cy="{y}" r="4"/>',
+        "workoff": '<circle class="workoff mark" cx="{cx}" cy="{y}" r="3.5"/>',
+        "req": '<circle class="req mark" cx="{cx}" cy="{y}" r="4"/>',
     }
-    for i, line in enumerate(legend):
-        column, row = (0, i) if i < 4 else (1, i - 4)
-        x = 14 + column * 186
-        y = 248 + row * 15
-        if values.status != STATUS_UNSUPPORTED_UNIT and i in marks:
-            parts.append(marks[i].format(x=x, x2=x + 14, cx=x + 7, y=y - 3.5))
+    for column, row, mark, line in legend:
+        x = 14 + (column or 0) * 232
+        y = _LEGEND_TOP + row * _LEGEND_ROW
+        if mark is not None:
+            parts.append(marks[mark].format(x=x, x2=x + 14, cx=x + 7, y=y - 3.5))
         parts.append(_text(x + 20, y, line, "txt"))
     parts.append(_text(14, HEIGHT - 9, texts["note"], "note"))
     parts.append("</svg>")

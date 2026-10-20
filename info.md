@@ -1,5 +1,23 @@
 ## Changes as compared to your installed version:
 
+## 0.9.0b2 (pre-release)
+
+### Climatic curve chart
+- The flow axis follows the max flow temperature: from 20 °C to max + 15 °C
+  (at least 50 °C, rounded up to the next 10). It starts from 10 °C when the
+  min or max flow temperature is below 20 °C. With a 35 °C max the working
+  point and the requested flow are now clearly apart.
+- The legend shows the curve value at the outdoor temperature and, when the
+  min or max flow temperature applies, the limited value: e.g. *Outdoor
+  15.3 °C → curve 23.3 °C, limited to 24 °C*.
+- Values off the chart are held at its edge with an "off scale" mark and
+  their real value in the legend: an outdoor temperature above 20 °C or
+  below -16 °C (the curve value at the edge is used, never extrapolated) and
+  a requested flow above or below the axis. New attributes
+  `outdoor_off_scale` and `requested_off_scale`.
+- Nothing is drawn outside the chart; curves leaving it at the top stop at
+  the edge with their label.
+
 ## 0.9.0b1 (pre-release)
 
 ### New

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from pathlib import Path
 import xml.etree.ElementTree as ET
 from datetime import timedelta
 
@@ -145,7 +146,7 @@ async def test_entity_created_without_warnings(hass, chart_cloud, caplog):
     ours = [
         r for r in caplog.records
         if r.levelno >= logging.WARNING
-        and (r.name.startswith("custom_components") or "image" in r.getMessage() or "categor" in r.getMessage())
+        and r.name.startswith(("custom_components", "homeassistant.helpers", "homeassistant.components.image"))
     ]
     assert ours == [], caplog.text
     # Read only: no write to the cloud.
@@ -398,7 +399,7 @@ async def test_attributes_describe_the_drawn_image(hass, chart_cloud):
     attrs = hass.states.get(chart_id(hass)).attributes
     # Not redrawn: the attributes still show the drawn 15.3, like the image.
     assert attrs["outdoor_temperature"] == 15.3
-    assert "Outdoor 15.3 °C → curve 24 °C" in texts(await svg_of(hass))
+    assert "Outdoor 15.3 °C → curve 23.3 °C, limited to 24 °C" in texts(await svg_of(hass))
 
 
 async def test_attributes_are_not_recorded(hass, chart_cloud):
@@ -438,7 +439,7 @@ async def test_italian_chart(hass, chart_cloud):
     await setup_entry(hass, "it")
     root = await svg_of(hass)
     assert "Mandata richiesta 26 °C (termostato)" in texts(root)
-    assert "T esterna 15.3 °C → curva 24 °C" in texts(root)
+    assert "T esterna 15.3 °C → curva 23.3 °C, limitata a 24 °C" in texts(root)
 
 
 async def test_unknown_language_falls_back_to_english(hass, chart_cloud):
@@ -468,3 +469,76 @@ def test_curve_chart_does_not_import_home_assistant():
     source = curve_chart.__file__
     with open(source, encoding="utf-8") as file:
         assert "homeassistant" not in file.read()
+
+
+# ----------------------------------------------- 0.9.0b2: axis, off scale
+
+
+async def test_piano_1_attributes_b2(hass, chart_cloud):
+    await setup_entry(hass)
+    attrs = hass.states.get(chart_id(hass)).attributes
+    assert attrs["outdoor_off_scale"] is False and attrs["requested_off_scale"] is False
+    entity = chart_entity(hass)
+    assert {"outdoor_off_scale", "requested_off_scale"} <= entity._unrecorded_attributes
+
+
+@pytest.mark.parametrize(
+    ("language", "text"),
+    [
+        ("en", "Outdoor 23.1 °C (off scale, value at 20 °C) → curve 20 °C, limited to 24 °C"),
+        ("it", "T esterna 23.1 °C (fuori scala, valore a 20 °C) → curva 20 °C, limitata a 24 °C"),
+    ],
+)
+async def test_outdoor_off_scale_on_the_entity(hass, chart_cloud, language, text):
+    update(chart_cloud, "Boilers/data", outdoor_probe_temp="23.1")
+    await setup_entry(hass, language)
+    attrs = hass.states.get(chart_id(hass)).attributes
+    assert attrs["outdoor_temperature"] == 23.1 and attrs["outdoor_off_scale"] is True
+    assert attrs["curve_flow_temperature"] == 20 and attrs["limited_flow_temperature"] == 24
+    root = await svg_of(hass)
+    assert text in texts(root)
+    assert drawn(root, "circle", "workoff") and drawn(root, "polygon", "offscale")
+
+
+@pytest.mark.parametrize(
+    ("language", "text"),
+    [
+        ("en", "Requested flow 60 °C, off scale (thermostat)"),
+        ("it", "Mandata richiesta 60 °C, fuori scala (termostato)"),
+    ],
+)
+async def test_requested_off_scale_on_the_entity(hass, chart_cloud, language, text):
+    update(chart_cloud, "Thermostats/data", central_heating_thermostat_OT_set_point="60")
+    await setup_entry(hass, language)
+    attrs = hass.states.get(chart_id(hass)).attributes
+    assert attrs["requested_flow_temperature"] == 60 and attrs["requested_off_scale"] is True
+    root = await svg_of(hass)
+    assert text in texts(root)
+    assert drawn(root, "polygon", "offscale")
+
+
+async def test_axis_follows_max_and_min(hass, chart_cloud):
+    entry = await setup_entry(hass)
+
+    def axis_labels(root):
+        return [t.text for t in root.iter("{http://www.w3.org/2000/svg}text")
+                if t.get("class") == "axis" and t.get("text-anchor") == "end" and t.text.isdigit()]
+
+    assert axis_labels(await svg_of(hass))[-1] == "50"
+    events = track(hass)
+    update(chart_cloud, "Thermostats/data", max_heating_set_point="45.0")
+    await refresh(hass, entry)
+    assert len(integration_writes(events)) == 1
+    assert axis_labels(await svg_of(hass))[-1] == "60"
+    update(chart_cloud, "Thermostats/data", min_heating_set_point="15.0")
+    await refresh(hass, entry)
+    assert len(integration_writes(events)) == 2
+    assert axis_labels(await svg_of(hass))[0] == "10"
+
+
+async def test_off_scale_attribute_names_are_translated():
+    base = Path(curve_chart.__file__).parent
+    for name in ("strings.json", "translations/en.json", "translations/it.json"):
+        attributes = json.loads((base / name).read_text(encoding="utf-8"))["entity"]["image"][
+            "climatic_curve_chart"]["state_attributes"]
+        assert {"outdoor_off_scale", "requested_off_scale"} <= set(attributes)

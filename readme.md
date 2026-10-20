@@ -205,6 +205,18 @@ ever written.
 - No points without a valid outdoor temperature, or while the boiler is
   offline (*boiler unreachable*; curve and limits stay). Thermostats or
   boilers not set to °C show *unsupported unit* and no curves.
+- The flow axis goes from 20 °C to the max flow temperature + 15 °C (at
+  least 50 °C, rounded up to the next 10; 100 °C without a max), and starts
+  from 10 °C when the min or max flow temperature is below 20 °C. Curves
+  leaving the chart at the top stop at the edge with their label.
+- The legend shows the curve value at the outdoor temperature and, when the
+  min or max flow temperature applies, the limited value (*curve 23.3 °C,
+  limited to 24 °C*).
+- **Off scale**: an outdoor temperature above 20 °C or below -16 °C, or a
+  requested flow outside the flow axis, is held at the edge of the chart
+  with a small triangle and the real value in the legend ("off scale"). The
+  curve is never extrapolated beyond the manual: the value at the edge is
+  used. Attributes `outdoor_off_scale` / `requested_off_scale`.
 - The image is redrawn only when something visible changes: any change of
   curve, limits or influence, or the outdoor temperature / requested flow
   moving by at least 0.5 °C. The attributes always describe the image shown.

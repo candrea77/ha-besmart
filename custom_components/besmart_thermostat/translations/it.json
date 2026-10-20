@@ -183,6 +183,20 @@
                             "unsupported_unit": "Unità non supportata",
                             "boiler_offline": "Caldaia non raggiungibile"
                         }
+                    },
+                    "outdoor_off_scale": {
+                        "name": "Temperatura esterna fuori scala",
+                        "state": {
+                            "true": "Sì",
+                            "false": "No"
+                        }
+                    },
+                    "requested_off_scale": {
+                        "name": "Mandata richiesta fuori scala",
+                        "state": {
+                            "true": "Sì",
+                            "false": "No"
+                        }
                     }
                 }
             }
