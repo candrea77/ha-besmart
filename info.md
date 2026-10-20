@@ -1,9 +1,21 @@
 ## Changes as compared to your installed version:
 
-## 0.9.0b1 (pre-release, work in progress)
+## 0.9.0b1 (pre-release)
 
 ### New
-- **Climatic Curve Chart** image entity for each thermostat (in progress).
+- **Climatic curve chart**: a new image entity for each thermostat
+  (configuration section of the thermostat device; in Italian *Grafico
+  curva climatica*). It draws the curves of the Riello manual with the
+  selected climatic curve limited between the minimum and maximum flow
+  temperature, the working point at the outdoor temperature and the flow
+  temperature actually requested for that thermostat. The chart is
+  indicative (traced from the Riello manual), not the exact calculation of
+  the boiler.
+- Read only: no extra requests to the cloud, nothing is written.
+- Redrawn only for visible changes (curve, limits, influence, or outdoor
+  temperature / requested flow moving by 0.5 °C or more).
+- Texts in English or Italian (Home Assistant language). Light/dark colours
+  follow the operating system or browser, not the Home Assistant theme.
 
 ## 0.8.1
 
