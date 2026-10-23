@@ -1,39 +1,38 @@
 ## Changes as compared to your installed version:
 
-## 0.9.0b2 (pre-release)
+## 0.9.0
 
-### Climatic curve chart
+### New: climatic curve chart
+- A new image entity for each thermostat, **Climatic curve chart** (in
+  Italian *Grafico curva climatica*), in the configuration section of the
+  thermostat device.
+- It draws the curves of the Riello manual (0.2 … 3.0) with the selected
+  climatic curve limited between the minimum and maximum flow temperature,
+  the working point at the outdoor temperature and the flow temperature
+  actually requested for that thermostat (from the thermostat while it
+  calls for heat, otherwise from the boiler target), so you can see the
+  effect of the room sensor influence.
+- The chart is indicative (traced from the Riello manual), not the exact
+  calculation of the boiler.
 - The flow axis follows the max flow temperature: from 20 °C to max + 15 °C
-  (at least 50 °C, rounded up to the next 10). It starts from 10 °C when the
-  min or max flow temperature is below 20 °C. With a 35 °C max the working
-  point and the requested flow are now clearly apart.
+  (at least 50 °C, rounded up to the next 10), starting from 10 °C when the
+  min or max flow temperature is below 20 °C.
 - The legend shows the curve value at the outdoor temperature and, when the
   min or max flow temperature applies, the limited value: e.g. *Outdoor
   15.3 °C → curve 23.3 °C, limited to 24 °C*.
 - Values off the chart are held at its edge with an "off scale" mark and
   their real value in the legend: an outdoor temperature above 20 °C or
   below -16 °C (the curve value at the edge is used, never extrapolated) and
-  a requested flow above or below the axis. New attributes
-  `outdoor_off_scale` and `requested_off_scale`.
-- Nothing is drawn outside the chart; curves leaving it at the top stop at
-  the edge with their label.
-
-## 0.9.0b1 (pre-release)
-
-### New
-- **Climatic curve chart**: a new image entity for each thermostat
-  (configuration section of the thermostat device; in Italian *Grafico
-  curva climatica*). It draws the curves of the Riello manual with the
-  selected climatic curve limited between the minimum and maximum flow
-  temperature, the working point at the outdoor temperature and the flow
-  temperature actually requested for that thermostat. The chart is
-  indicative (traced from the Riello manual), not the exact calculation of
-  the boiler.
-- Read only: no extra requests to the cloud, nothing is written.
+  a requested flow above or below the axis. Nothing is drawn outside the
+  chart.
+- No points while the boiler is offline (curve and limits stay); thermostats
+  or boilers not set to °C show "unsupported unit".
 - Redrawn only for visible changes (curve, limits, influence, or outdoor
-  temperature / requested flow moving by 0.5 °C or more).
+  temperature / requested flow moving by 0.5 °C or more); the attributes
+  always describe the image shown and are not recorded.
 - Texts in English or Italian (Home Assistant language). Light/dark colours
   follow the operating system or browser, not the Home Assistant theme.
+- Read only: no extra requests to the cloud, nothing is written.
 
 ## 0.8.1
 
