@@ -37,7 +37,7 @@ Never put the following in a report, in attachments or in screenshots:
 - WiFi box ids, thermostat ids and boiler ids, and your BeSMART user id;
 - logs that are not masked. If a log is needed, remove these values first.
 
-If something is needed to reproduce the problem, we will ask for it.
+If something is needed to reproduce the problem, the maintainer will ask for it.
 
 ## Scope
 
