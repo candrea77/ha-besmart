@@ -141,6 +141,66 @@
                 }
             }
         },
+        "image": {
+            "climatic_curve_chart": {
+                "name": "Grafico curva climatica",
+                "state_attributes": {
+                    "climatic_curve": {
+                        "name": "Curva climatica"
+                    },
+                    "max_flow_temperature": {
+                        "name": "Temperatura di mandata massima"
+                    },
+                    "min_flow_temperature": {
+                        "name": "Temperatura di mandata minima"
+                    },
+                    "sensor_influence": {
+                        "name": "Influenza sensore ambiente"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Temperatura esterna"
+                    },
+                    "curve_flow_temperature": {
+                        "name": "Mandata della curva"
+                    },
+                    "limited_flow_temperature": {
+                        "name": "Mandata della curva limitata"
+                    },
+                    "requested_flow_temperature": {
+                        "name": "Mandata richiesta"
+                    },
+                    "requested_flow_source": {
+                        "name": "Fonte della mandata richiesta",
+                        "state": {
+                            "thermostat": "Termostato",
+                            "boiler": "Caldaia"
+                        }
+                    },
+                    "status": {
+                        "name": "Stato del grafico",
+                        "state": {
+                            "ok": "OK",
+                            "unsupported_unit": "Unità non supportata",
+                            "boiler_offline": "Caldaia non raggiungibile"
+                        }
+                    },
+                    "outdoor_off_scale": {
+                        "name": "Temperatura esterna fuori scala",
+                        "state": {
+                            "true": "Sì",
+                            "false": "No"
+                        }
+                    },
+                    "requested_off_scale": {
+                        "name": "Mandata richiesta fuori scala",
+                        "state": {
+                            "true": "Sì",
+                            "false": "No"
+                        }
+                    }
+                }
+            }
+        },
         "number": {
             "max_heating_set_point": {
                 "name": "Mandata massima"

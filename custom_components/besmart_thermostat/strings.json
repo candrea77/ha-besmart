@@ -141,6 +141,66 @@
                 }
             }
         },
+        "image": {
+            "climatic_curve_chart": {
+                "name": "Climatic curve chart",
+                "state_attributes": {
+                    "climatic_curve": {
+                        "name": "Climatic curve"
+                    },
+                    "max_flow_temperature": {
+                        "name": "Max flow temperature"
+                    },
+                    "min_flow_temperature": {
+                        "name": "Min flow temperature"
+                    },
+                    "sensor_influence": {
+                        "name": "Room sensor influence"
+                    },
+                    "outdoor_temperature": {
+                        "name": "Outdoor temperature"
+                    },
+                    "curve_flow_temperature": {
+                        "name": "Curve flow temperature"
+                    },
+                    "limited_flow_temperature": {
+                        "name": "Limited curve flow temperature"
+                    },
+                    "requested_flow_temperature": {
+                        "name": "Requested flow temperature"
+                    },
+                    "requested_flow_source": {
+                        "name": "Requested flow source",
+                        "state": {
+                            "thermostat": "Thermostat",
+                            "boiler": "Boiler"
+                        }
+                    },
+                    "status": {
+                        "name": "Chart status",
+                        "state": {
+                            "ok": "OK",
+                            "unsupported_unit": "Unsupported unit",
+                            "boiler_offline": "Boiler unreachable"
+                        }
+                    },
+                    "outdoor_off_scale": {
+                        "name": "Outdoor temperature off scale",
+                        "state": {
+                            "true": "Yes",
+                            "false": "No"
+                        }
+                    },
+                    "requested_off_scale": {
+                        "name": "Requested flow off scale",
+                        "state": {
+                            "true": "Yes",
+                            "false": "No"
+                        }
+                    }
+                }
+            }
+        },
         "number": {
             "max_heating_set_point": {
                 "name": "Max Flow Temperature"

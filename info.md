@@ -1,5 +1,40 @@
 ## Changes as compared to your installed version:
 
+## 0.9.0
+
+### New: climatic curve chart
+- A new image entity for each thermostat, **Climatic curve chart** (in
+  Italian *Grafico curva climatica*), in the configuration section of the
+  thermostat device.
+- It draws the curves of the Riello manual (0.2 … 3.0) with the selected
+  climatic curve limited between the minimum and maximum flow temperature,
+  the working point at the outdoor temperature and the flow temperature
+  actually requested for that thermostat (only while the thermostat calls
+  for heat: its own requested value, or the boiler target if that is not
+  valid; no point when it does not call for heat), so you can see the
+  effect of the room sensor influence.
+- The chart is indicative (traced from the Riello manual), not the exact
+  calculation of the boiler.
+- The flow axis follows the max flow temperature: from 20 °C to max + 15 °C
+  (at least 50 °C, rounded up to the next 10), starting from 10 °C when the
+  min or max flow temperature is below 20 °C.
+- The legend shows the curve value at the outdoor temperature and, when the
+  min or max flow temperature applies, the limited value: e.g. *Outdoor
+  15.3 °C → curve 23.3 °C, limited to 24 °C*.
+- Values off the chart are held at its edge with an "off scale" mark and
+  their real value in the legend: an outdoor temperature above 20 °C or
+  below -16 °C (the curve value at the edge is used, never extrapolated) and
+  a requested flow above or below the axis. Nothing is drawn outside the
+  image.
+- No points while the boiler is offline (curve and limits stay); thermostats
+  or boilers not set to °C show "unsupported unit".
+- Redrawn only for visible changes (curve, limits, influence, or outdoor
+  temperature / requested flow moving by 0.5 °C or more); the attributes
+  always describe the image shown and are not recorded.
+- Texts in English or Italian (Home Assistant language). Light/dark colours
+  follow the operating system or browser, not the Home Assistant theme.
+- Read only: no extra requests to the cloud, nothing is written.
+
 ## 0.8.1
 
 ### Improvements

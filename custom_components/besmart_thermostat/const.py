@@ -18,6 +18,8 @@ PLATFORMS: list[Platform] = [
     # room sensor influence).
     Platform.NUMBER,
     Platform.SELECT,
+    # PATCH 0.9: climatic curve chart (SVG image, read only).
+    Platform.IMAGE,
 ]
 
 # --- Config / options keys -------------------------------------------------

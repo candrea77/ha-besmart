@@ -13,6 +13,9 @@ through the BeSMART cloud — the same service used by the official app.
   (Auto, Manual, Eco, Party, Off/anti-freeze), heating/cooling season.
 - **Thermostat settings** (installer parameters): climatic curve, maximum
   and minimum flow temperature, room sensor influence.
+- **Climatic curve chart** per thermostat (since 0.9.0): the curves of the
+  Riello manual with the current settings, the outdoor temperature and the
+  requested flow temperature.
 - Domestic hot water (DHW): target temperature and boiler work mode.
 - Boiler monitoring: pressure, flow (water) temperature, outdoor probe,
   **burner modulation (%)**, flame / circulator / DHW-tap states.
@@ -122,6 +125,7 @@ Thermostat*, *Casa Water Heater*).
 | Max Flow Temperature | number (configuration) | 15–80 °C, step 1, never below the current minimum. |
 | Min Flow Temperature | number (configuration) | 10–75 °C, step 1, never above the current maximum. |
 | Room Sensor Influence | number (configuration) | 0–20, step 1. |
+| Climatic curve chart | image (configuration) | SVG chart, read only. See [Climatic curve chart](#climatic-curve-chart). |
 
 **WiFi box device**:
 
@@ -171,6 +175,56 @@ They work like the settings page of the official app:
   if the cloud reports a different value an error is shown.
 
 The values are read with the normal thermostat data: no extra requests.
+
+### Climatic curve chart
+
+> ℹ️ **The chart is indicative.** The curves were traced from the chart in
+> the Riello manual: they are not the exact calculation done by the boiler.
+
+One image per thermostat (*&lt;Room&gt; Climatic curve chart*, in Italian
+*Grafico curva climatica*), in the configuration section of the thermostat
+device. It only reads data already polled: no extra requests, nothing is
+ever written.
+
+- All the curves of the manual (0.2 … 3.0) in grey; the selected curve is
+  highlighted and limited between the **minimum** (blue) and **maximum**
+  (red) flow temperature, i.e. what the boiler can actually ask for. The
+  part outside the limits is dashed.
+- **Working point**: the selected curve at the outdoor probe temperature
+  (*Outdoor Temperature* of the boiler).
+- **Requested flow**: the flow temperature actually requested for that
+  thermostat, shown at the same outdoor temperature, as read from the cloud
+  (never recalculated), so you can see the effect of the room sensor
+  influence. It comes from the thermostat while it calls for heat, or from
+  the boiler target if the thermostat value is not usable; without a heat
+  request there is no requested flow. The attribute
+  `requested_flow_source` says which one was used.
+- Manual formula, shown as a note: *T flow = T curve + (CLI × InFL × ΔT
+  room)*. The chart does not assume whether the boiler applies the room
+  influence before or after the min/max limits.
+- No points without a valid outdoor temperature, or while the boiler is
+  offline (*boiler unreachable*; curve and limits stay). Thermostats or
+  boilers not set to °C show *unsupported unit* and no curves.
+- The flow axis goes from 20 °C to the max flow temperature + 15 °C (at
+  least 50 °C, rounded up to the next 10; 100 °C without a max), and starts
+  from 10 °C when the min or max flow temperature is below 20 °C. Curves
+  leaving the chart at the top stop at the edge with their label.
+- The legend shows the curve value at the outdoor temperature and, when the
+  min or max flow temperature applies, the limited value (*curve 23.3 °C,
+  limited to 24 °C*).
+- **Off scale**: an outdoor temperature above 20 °C or below -16 °C, or a
+  requested flow outside the flow axis, is held at the edge of the chart
+  with a small triangle and the real value in the legend ("off scale"). The
+  curve is never extrapolated beyond the manual: the value at the edge is
+  used. Attributes `outdoor_off_scale` / `requested_off_scale`.
+- The image is redrawn only when something visible changes: any change of
+  curve, limits or influence, or the outdoor temperature / requested flow
+  moving by at least 0.5 °C. The attributes always describe the image shown.
+- Texts follow the Home Assistant language (English or Italian; other
+  languages: English).
+- **Light and dark colours follow the operating system / browser setting,
+  not the Home Assistant theme.** The chart has its own neutral background,
+  so it stays readable with either theme.
 
 ### Supported languages
 

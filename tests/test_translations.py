@@ -91,9 +91,18 @@ THERMOSTAT_0_8_0 = {
         "Living Influenza sensore ambiente",
     ),
 }
+# PATCH 0.9: climatic curve chart (image) on the thermostat device.
+CHART_0_9_0 = {
+    "r1_climatic_curve_chart": (
+        "image.living_climatic_curve_chart",
+        "Living Climatic curve chart",
+        "Living Grafico curva climatica",
+    ),
+}
 ALL_ENTITIES = {
     **{k: v for k, v in ENTITIES.items() if k not in THERMOSTAT_SUFFIXES},
     **THERMOSTAT_0_8_0,
+    **CHART_0_9_0,
 }
 
 
