@@ -9,8 +9,9 @@
 - It draws the curves of the Riello manual (0.2 … 3.0) with the selected
   climatic curve limited between the minimum and maximum flow temperature,
   the working point at the outdoor temperature and the flow temperature
-  actually requested for that thermostat (from the thermostat while it
-  calls for heat, otherwise from the boiler target), so you can see the
+  actually requested for that thermostat (only while the thermostat calls
+  for heat: its own requested value, or the boiler target if that is not
+  valid; no point when it does not call for heat), so you can see the
   effect of the room sensor influence.
 - The chart is indicative (traced from the Riello manual), not the exact
   calculation of the boiler.
@@ -24,7 +25,7 @@
   their real value in the legend: an outdoor temperature above 20 °C or
   below -16 °C (the curve value at the edge is used, never extrapolated) and
   a requested flow above or below the axis. Nothing is drawn outside the
-  chart.
+  image.
 - No points while the boiler is offline (curve and limits stay); thermostats
   or boilers not set to °C show "unsupported unit".
 - Redrawn only for visible changes (curve, limits, influence, or outdoor
