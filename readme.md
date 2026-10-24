@@ -9,8 +9,9 @@ through the BeSMART cloud — the same service used by the official app.
 
 ## Features
 
-- Control of every BeSMART thermostat: target temperature, presets
-  (Auto, Manual, Eco, Party, Off/anti-freeze), heating/cooling season.
+- Control of every BeSMART thermostat: target temperature, translated
+  presets (Auto, Manual, Away, Party, Frost protection), heating/cooling
+  season.
 - **Thermostat settings** (installer parameters): climatic curve, maximum
   and minimum flow temperature, room sensor influence.
 - **Climatic curve chart** per thermostat (since 0.9.0): the curves of the
@@ -150,6 +151,44 @@ Thermostat*, *Casa Water Heater*).
 Boiler entities and thermostat settings are created only when the WiFi box
 reports a boiler.
 
+### Thermostat presets and attributes
+
+Since 0.10.0 the presets have lowercase values, translated in the UI. Use
+the **value** in automations and scripts:
+
+| BeSMART app | Value | English | Italian |
+|---|---|---|---|
+| Auto | `auto` | Auto | Automatico |
+| Manuale - Comfort | `manual` | Manual | Manuale |
+| Vacanza - Economy | `away` | Away (Home Assistant standard) | Fuori casa (Home Assistant standard) |
+| Party - Comfort | `party` | Party | Party |
+| Spento - Antigelo | `frost_protection` | Frost protection | Antigelo |
+| Sanitario (DHW only) | no preset: the thermostat is *off* | | |
+
+```yaml
+action: climate.set_preset_mode
+target:
+  entity_id: climate.living_thermostat
+data:
+  preset_mode: away
+```
+
+To turn a thermostat off (BeSMART *Sanitario*, hot water only) use
+`climate.turn_off` or `climate.set_hvac_mode` with `hvac_mode: off`;
+`climate.turn_on` goes back to `auto`. Up to 0.9.x the presets were `AUTO`,
+`MANUAL`, `ECO`, `PARTY`, `IDLE` (and a hidden `DHW`): see the 0.10.0
+release notes.
+
+Thermostat attributes:
+
+| Attribute | Meaning |
+|---|---|
+| `mode` | BeSMART mode number: 0 auto, 1 manual, 2 away (holiday), 3 party, 4 frost protection, 5 off (DHW only). Stable across versions. |
+| `ot_set_point` | OpenTherm set point reported by the cloud (raw value; 5 when the thermostat does not call for heat). Was `setpoint_OT`. |
+| `comfort_temp`, `economy_temp`, `frost_temp` | Comfort, economy and frost protection temperatures. `comfort_temp` was `confort_temp`. |
+| `battery_low` | Thermostat battery low. |
+| `updating_temp` | A new target temperature has not reached the thermostat yet. |
+
 ### Thermostat settings
 
 > ⚠️ **These are installer parameters.** They change the flow temperature
@@ -244,7 +283,8 @@ table above in English; in Italian they become e.g. *&lt;Stanza&gt; Termostato*,
 *&lt;Stanza&gt; Curva climatica*, *&lt;Stanza&gt; Mandata massima*,
 *Acqua calda sanitaria*, *Modulazione caldaia*, *Fiamma caldaia* (Accesa /
 Spenta), *Prelievo ACS* (In corso / Nessun prelievo). Thermostat presets
-(AUTO, MANUAL, ECO, PARTY, IDLE) are not translated yet.
+are translated since 0.10.0 (see
+[Thermostat presets and attributes](#thermostat-presets-and-attributes)).
 
 - **Entity ids never change on an update**: existing entities keep their
   `entity_id`, so automations and scripts keep working. Only the displayed
@@ -291,6 +331,9 @@ issue (with a diagnostics file) so it can be added here.
   while the data is partial.
 - Some technical values are not available on every boiler: they are listed
   in the `unsupported_endpoints` attribute.
+- **Holiday end not available:** when a thermostat is set to *Vacanza -
+  Economy* (`away`) the cloud does not report when the holiday ends, so
+  Home Assistant cannot show it.
 - Cloud only: no local control. If the BeSMART cloud is down, the
   integration cannot work.
 - The login endpoint only accepts credentials in the URL (see below).

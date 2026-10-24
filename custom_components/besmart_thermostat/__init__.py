@@ -18,6 +18,7 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from .const import (
     DOMAIN,
     PLATFORMS,
+    ISSUE_PRESETS_RENAMED,
     ISSUE_TLS_CERTIFICATE,
     ISSUE_VERIFY_SSL_DISABLED,
     account_unique_id,
@@ -44,6 +45,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
       becomes True. An explicit False chosen by the user is kept, with a
       Repair warning raised at setup.
     The unique_id is not set here but at the first successful setup.
+
+    PATCH 0.10, version 2.1 -> 2.2: data and options unchanged; raises the
+    one-time Repairs notice of the renamed presets/attributes, so only users
+    who update see it (new entries are created as 2.2). Home Assistant calls
+    this function whenever the minor version differs, also when it is
+    higher (downgrade from a future version): 2.3+ must return True without
+    changes, like 0.9.x does with 2.2, so going back stays possible.
     """
     if entry.version > 2:
         # Downgrade from a future version: refuse.
@@ -58,9 +66,23 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
         options.setdefault(CONF_VERIFY_SSL, True)
         hass.config_entries.async_update_entry(
-            entry, data=data, options=options, version=2
+            entry, data=data, options=options, version=2, minor_version=1
         )
         _LOGGER.info("Migrated BeSMART config entry to version 2")
+
+    if entry.version == 2 and entry.minor_version == 1:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{ISSUE_PRESETS_RENAMED}_{entry.entry_id}",
+            is_fixable=True,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_PRESETS_RENAMED,
+            translation_placeholders={"name": entry.title},
+        )
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+        _LOGGER.info("Migrated BeSMART config entry to version 2.2")
 
     return True
 
@@ -185,5 +207,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     The credentials are deleted by Home Assistant together with the entry.
     """
-    for issue in (ISSUE_TLS_CERTIFICATE, ISSUE_VERIFY_SSL_DISABLED):
+    for issue in (ISSUE_TLS_CERTIFICATE, ISSUE_VERIFY_SSL_DISABLED, ISSUE_PRESETS_RENAMED):
         ir.async_delete_issue(hass, DOMAIN, f"{issue}_{entry.entry_id}")

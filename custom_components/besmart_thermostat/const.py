@@ -2,6 +2,7 @@
 
 import hashlib
 
+from homeassistant.components.climate import PRESET_AWAY
 from homeassistant.const import Platform
 
 DOMAIN = "besmart_thermostat"
@@ -45,6 +46,27 @@ SCAN_INTERVAL_STEP = 60
 # PATCH 0.7 (security): Repairs issue ids (suffixed with the entry id).
 ISSUE_VERIFY_SSL_DISABLED = "verify_ssl_disabled"
 ISSUE_TLS_CERTIFICATE = "tls_certificate_error"
+# PATCH 0.10: one-time notice of the renamed presets/attributes (raised by the
+# config entry migration 2.1 -> 2.2, i.e. only for users who update).
+ISSUE_PRESETS_RENAMED = "presets_renamed"
+
+# PATCH 0.10: thermostat presets. Home Assistant translation keys must be
+# lowercase, so the old uppercase values (AUTO, MANUAL, ECO, PARTY, IDLE)
+# became these; "away" is Home Assistant's standard preset (BeSMART
+# "Vacanza - Economy"), the others are translated by this integration.
+# BeSMART mode 5 (DHW only) is not a preset: it is hvac_mode off.
+PRESET_AUTO = "auto"
+PRESET_MANUAL = "manual"
+PRESET_PARTY = "party"
+PRESET_FROST_PROTECTION = "frost_protection"
+# preset -> BeSMART thermostat mode (order = order shown in the UI)
+PRESET_TO_BESMART_MODE = {
+    PRESET_AUTO: 0,
+    PRESET_MANUAL: 1,
+    PRESET_AWAY: 2,
+    PRESET_PARTY: 3,
+    PRESET_FROST_PROTECTION: 4,
+}
 
 
 def account_unique_id(user_id: str) -> str:

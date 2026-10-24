@@ -26,7 +26,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .api import BesmartValidationError, parse_value
+from .api import BesmartValidationError, mask_id, parse_value
+from .const import DOMAIN, PRESET_TO_BESMART_MODE
 from .coordinator import BesmartDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
     # BeSmart mode
     AUTO = 0  # 'Auto'
     MANUAL = 1  # 'Manuale - Confort'
-    ECONOMY = 2  # 'Holiday - Economy'
+    ECONOMY = 2  # 'Vacanza - Economy' (holiday)
     PARTY = 3  # 'Party - Confort'
     IDLE = 4  # 'Spento - Antigelo'
     DHW = 5  # 'Sanitario - Domestic hot water only'
@@ -86,24 +87,11 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
     CLIMATE_TEMP_STEP = 0.2
     CLIMATE_TEMP_PRECISION = 0.1
 
-    PRESET_HA_TO_BESMART = {
-        "AUTO": AUTO,
-        "MANUAL": MANUAL,
-        "ECO": ECONOMY,
-        "PARTY": PARTY,
-        "IDLE": IDLE,
-        "DHW": DHW,
-    }
-
-    PRESET_BESMART_TO_HA = {
-        AUTO: "AUTO",
-        MANUAL: "MANUAL",
-        ECONOMY: "ECO",
-        PARTY: "PARTY",
-        IDLE: "IDLE",
-        DHW: "DHW",
-    }
-    PRESET_MODE_LIST = list(p for p in PRESET_HA_TO_BESMART if p != "DHW")
+    # PATCH 0.10: lowercase translated presets (were AUTO, MANUAL, ECO,
+    # PARTY, IDLE); DHW (5) is no longer a preset, only hvac_mode off.
+    PRESET_HA_TO_BESMART = PRESET_TO_BESMART_MODE
+    PRESET_BESMART_TO_HA = {mode: preset for preset, mode in PRESET_TO_BESMART_MODE.items()}
+    PRESET_MODE_LIST = list(PRESET_TO_BESMART_MODE)
 
     HVAC_MODE_BESMART_TO_HA = {
         "1": HVACMode.HEAT,
@@ -142,7 +130,9 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         self._comfT = 0.0
         self._season = "1"
         self._setpoint_OT = 0.0
-        self._holiday_end_time = None
+        # PATCH 0.10: removed _holiday_end_time (never exposed nor reset; the
+        # holiday end is not in Thermostats/data). Unknown modes logged once.
+        self._unknown_mode_logged = False
 
         # link to the thermostat device (PATCH 0.8 (b2): was the WiFi box)
         self._attr_device_info = device_info
@@ -203,6 +193,19 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             # with the default above.
             self._current_state = self.IDLE
 
+        # PATCH 0.10: an unknown mode has no preset (was shown as IDLE).
+        if (
+            self._current_state not in self.PRESET_BESMART_TO_HA
+            and self._current_state != self.DHW
+            and not self._unknown_mode_logged
+        ):
+            self._unknown_mode_logged = True
+            _LOGGER.warning(
+                "Unknown BeSMART mode %s for thermostat %s",
+                self._current_state,
+                mask_id(self._room_id),
+            )
+
         if self._current_state == self.AUTO:
             # Extract current program step
             try:
@@ -231,11 +234,9 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
                 # advance option is used for switching to the ECO mode
                 # (automatically disables at holiday_end_time)
                 if thermostat.get("advance") == "1":
-                    self._holiday_end_time = int(thermostat.get("holiday_end_time", 0))
                     self._tempSetMark = "1"
             except Exception as ex:
-                _LOGGER.warning("Error parsing advance/holiday_end_time: %s", ex)
-                self._holiday_end_time = None
+                _LOGGER.warning("Error parsing advance: %s", ex)
         elif self._current_state == self.MANUAL or self._current_state == self.PARTY:
             self._tempSetMark = "2"
         elif self._current_state == self.ECONOMY:
@@ -335,12 +336,12 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
 
     @property
     def preset_mode(self):
-        """List of supported preset (comfort, home, sleep, Party, Off)."""
-        return self.PRESET_BESMART_TO_HA.get(self._current_state, "IDLE")
+        """PATCH 0.10: current preset; None for DHW (off) or an unknown mode."""
+        return self.PRESET_BESMART_TO_HA.get(self._current_state)
 
     @property
     def preset_modes(self):
-        """List of supported preset (comfort, home, sleep, Party, Off)."""
+        """List of supported presets (auto, manual, away, party, frost_protection)."""
         return self.PRESET_MODE_LIST
 
     @property
@@ -388,11 +389,13 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         """Return the device specific state attributes."""
         return {
             ATTR_MODE: self._current_state,
-            "setpoint_OT": self._setpoint_OT,
+            # PATCH 0.10: was "setpoint_OT" (translation keys are lowercase).
+            "ot_set_point": self._setpoint_OT,
             "updating_temp": self._tempSet != self.target_temperature,
             "battery_low": self._battery_low,
             "frost_temp": self._frostT,
-            "confort_temp": self._comfT,
+            # PATCH 0.10: was "confort_temp" (typo).
+            "comfort_temp": self._comfT,
             "economy_temp": self._saveT
         }
 
@@ -405,10 +408,11 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             raise ServiceValidationError(str(ex)) from None
 
     async def async_turn_on(self):
-        await self.async_set_preset_mode(self.PRESET_BESMART_TO_HA.get(self.AUTO))
+        await self._async_set_besmart_mode(self.AUTO)
 
     async def async_turn_off(self):
-        await self.async_set_preset_mode("DHW")
+        # PATCH 0.10: DHW (5) is set directly, it is no longer a preset.
+        await self._async_set_besmart_mode(self.DHW)
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set HVAC mode (COOL, HEAT) if supported."""
@@ -431,14 +435,26 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode):
-        """Set HVAC mode (comfort, home, sleep, Party, Off)."""
-        mode = self.PRESET_HA_TO_BESMART.get(preset_mode, self.AUTO)
+        """Set the BeSMART mode of a preset (auto, manual, away, party, frost_protection)."""
+        # PATCH 0.10: Home Assistant already rejects values not in
+        # preset_modes; never fall back to AUTO (it wrote a wrong mode).
+        mode = self.PRESET_HA_TO_BESMART.get(preset_mode)
+        if mode is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_preset",
+                translation_placeholders={"preset": str(preset_mode)},
+            )
+        await self._async_set_besmart_mode(mode)
+
+    async def _async_set_besmart_mode(self, mode: int) -> None:
+        """PATCH 0.10: write a BeSMART thermostat mode (presets, on, off)."""
         ok = await self._call(self._cl.setThermostatMode(self._wifi_box, self._room_id, mode))
         if not ok:
             raise HomeAssistantError(
-                f"Failed to set preset {preset_mode} for {self._room_name} on BeSMART cloud"
+                f"Failed to set mode {mode} for {self._room_name} on BeSMART cloud"
             )
-        _LOGGER.debug("Set operation mode=%s(%s)", str(preset_mode), str(mode))
+        _LOGGER.debug("Set operation mode=%s", str(mode))
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs):

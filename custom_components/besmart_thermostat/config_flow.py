@@ -126,6 +126,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
     # PATCH 0.7: version 2 = credentials in entry.data (see async_migrate_entry).
     VERSION = 2
+    # PATCH 0.10: 2.2 = presets/attributes renamed (one-time Repairs notice).
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
