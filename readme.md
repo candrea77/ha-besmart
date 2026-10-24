@@ -43,12 +43,16 @@ Tested on:
 
 ### HACS (recommended)
 
-1. Click the **Open in HACS** badge above, or in HACS add this repository as
-   a *custom repository* of type **Integration**:
-   `https://github.com/candrea77/ha-besmart`.
-2. Download **BeSMART** and restart Home Assistant.
+1. In HACS, search for **BeSMART** (by candrea77) and download it. The
+   **Open in HACS** badge above is a shortcut to the same page.
+2. Restart Home Assistant.
 3. Go to **Settings → Devices & services → Add integration → BeSMART** and
    enter your BeSMART username and password.
+
+If BeSMART does not show up yet (e.g. HACS has not refreshed its list), add
+`https://github.com/candrea77/ha-besmart` as a *custom repository* of type
+**Integration** (HACS → ⋮ → **Custom repositories**), then continue from
+step 1.
 
 > [!NOTE]
 > This integration uses the domain `besmart_thermostat`, like
@@ -69,8 +73,10 @@ remove it or enter your credentials again.
 1. **Make a Home Assistant backup** (the migration cannot be undone).
 2. In HACS, open *BeSMART* from coder89 → ⋮ → **Remove** (this removes only
    the downloaded files, not your configuration). Do not delete the
-   integration from *Settings → Devices & services*.
-3. Add this repository in HACS (badge above), download **BeSMART** and
+   integration from *Settings → Devices & services*. If you had added
+   coder89's repository as a custom repository, also remove that entry from
+   HACS → ⋮ → **Custom repositories**.
+3. In HACS, search for **BeSMART** (by candrea77), download it and
    **restart** Home Assistant.
 4. On start, the entry is upgraded: credentials move to protected storage,
    TLS verification is turned on and the default update interval (300 s) is
