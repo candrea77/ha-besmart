@@ -96,3 +96,6 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
   commit SHAs; the workflow token is read-only.
 - No `country` key in `hacs.json`: the integration must be visible in every
   country.
+- Listed in the HACS default catalog (`hacs/default`, integration list): the
+  README installation leads with searching for BeSMART in HACS; the custom
+  repository route is only a fallback.
