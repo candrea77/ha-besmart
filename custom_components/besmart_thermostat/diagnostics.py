@@ -73,6 +73,8 @@ async def async_get_config_entry_diagnostics(
         "entry_options": clean(dict(entry.options)),
         "coordinator_data": clean(coordinator.data or {}),
         "wifi_boxes": list(aliases.values()),
+        # PATCH 0.10: boiler link per box (raw, confirmed, offline seconds).
+        "boiler_link": clean(coordinator.boiler_link_diagnostics()),
         # PATCH 0.7: last on-demand technical reading per box.
         "technical_data": clean(
             {

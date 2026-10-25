@@ -347,6 +347,9 @@
         "boiler_offline": {
             "message": "The boiler is offline: the settings of thermostat {room} cannot be changed."
         },
+        "boiler_offline_dhw": {
+            "message": "The boiler is offline: domestic hot water cannot be changed."
+        },
         "settings_read_failed": {
             "message": "Could not read the current settings of thermostat {room} from the BeSMART cloud. Nothing was sent."
         },

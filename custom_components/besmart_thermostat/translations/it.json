@@ -347,6 +347,9 @@
         "boiler_offline": {
             "message": "La caldaia è offline: le impostazioni del termostato {room} non possono essere modificate."
         },
+        "boiler_offline_dhw": {
+            "message": "La caldaia è offline: l'acqua calda sanitaria non può essere modificata."
+        },
         "settings_read_failed": {
             "message": "Impossibile leggere dal cloud BeSMART le impostazioni attuali del termostato {room}. Non è stato inviato nulla."
         },

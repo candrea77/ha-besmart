@@ -18,10 +18,11 @@ from homeassistant.const import (
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import BesmartValidationError
+from .const import DOMAIN
 from .coordinator import BesmartDataUpdateCoordinator
+from .entity import BesmartBoilerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,10 +50,15 @@ async def async_setup_entry(
 
 # pylint: disable=abstract-method
 # pylint: disable=too-many-instance-attributes
-class WaterHeater(
-    CoordinatorEntity[BesmartDataUpdateCoordinator], WaterHeaterEntity, RestoreEntity
-):
-    """Representation of a Besmart water heater."""
+class WaterHeater(BesmartBoilerEntity, WaterHeaterEntity, RestoreEntity):
+    """Representation of a Besmart water heater.
+
+    PATCH 0.10: unavailable while the boiler is offline (BesmartBoilerEntity);
+    Home Assistant then skips its service calls, and a command that still
+    arrives is refused (_check_online).
+    """
+
+    DATA_KEY = "dhw_target_temp"
 
     _attr_has_entity_name = True
     _attr_translation_key = "water_heater"
@@ -120,10 +126,6 @@ class WaterHeater(
     def _data(self):
         """Latest boiler data dict from the coordinator (or None)."""
         return self.coordinator.boiler_data(self._wifi_box)
-
-    @property
-    def available(self) -> bool:
-        return super().available and self._data is not None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -236,6 +238,14 @@ class WaterHeater(
             ATTR_PREVIOUS_CLIMATE_ACTIVE: self._previous_climate_active,
         }
 
+    def _check_online(self) -> None:
+        """PATCH 0.10: refuse a command while the boiler is offline."""
+        if not self.coordinator.boiler_entity_available(self._wifi_box, self.DATA_KEY):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="boiler_offline_dhw",
+            )
+
     @staticmethod
     async def _call(command):
         """PATCH 0.7: run a write command; invalid input -> ServiceValidationError."""
@@ -260,6 +270,7 @@ class WaterHeater(
         if temperature is None:
             return
 
+        self._check_online()
         ok = await self._call(self._cl.setBoilerTemp(self._wifi_box, temperature))
         if not ok:
             raise HomeAssistantError("Failed to set DHW temperature on BeSMART cloud")
@@ -267,6 +278,7 @@ class WaterHeater(
 
     async def async_set_operation_mode(self, mode):
         """Set work mode (gas / off)."""
+        self._check_online()
         if mode == self.STATE_OFF:
             # Read thermostats from the coordinator instead of an extra
             # devices() API call.

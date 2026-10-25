@@ -27,7 +27,7 @@ from .api import (
     valid_heating_set_points,
     valid_sensor_influence,
 )
-from .coordinator import BesmartDataUpdateCoordinator
+from .coordinator import BesmartDataUpdateCoordinator, BoilerLink
 from .entity import thermostat_setting_entities
 
 # Fields of the polled thermostat data drawn on the chart.
@@ -164,6 +164,17 @@ class ClimaticCurveChart(CoordinatorEntity[BesmartDataUpdateCoordinator], ImageE
             return flow, curve_chart.SOURCE_BOILER
         return None, None
 
+    def _boiler_offline(self) -> bool:
+        """PATCH 0.10: same confirmed state as the boiler sensors.
+
+        Without boiler.online in the reads of the box, as before: offline
+        unless this thermostat's read (or Wifi_boxes/data) says "1".
+        """
+        co = self.coordinator
+        if co.boiler_link_raw(self._wifi_box) is BoilerLink.UNKNOWN:
+            return co.boiler_link(self._wifi_box, self._room_id) is not BoilerLink.ONLINE
+        return co.boiler_link(self._wifi_box) is BoilerLink.OFFLINE
+
     def _values(self) -> curve_chart.ChartValues:
         thermostat = self.coordinator.thermostat_data(self._wifi_box, self._room_id) or {}
         boiler = self.coordinator.boiler_data(self._wifi_box) or {}
@@ -177,7 +188,7 @@ class ClimaticCurveChart(CoordinatorEntity[BesmartDataUpdateCoordinator], ImageE
         }
         if not (_celsius(thermostat) and _celsius(boiler)):
             return curve_chart.ChartValues(**common, status=curve_chart.STATUS_UNSUPPORTED_UNIT)
-        if not self.coordinator.boiler_online(self._wifi_box, self._room_id):
+        if self._boiler_offline():
             return curve_chart.ChartValues(**common, status=curve_chart.STATUS_BOILER_OFFLINE)
         requested, source = self._requested_flow(thermostat, boiler)
         return curve_chart.ChartValues(

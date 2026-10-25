@@ -1,5 +1,33 @@
 ## Changes as compared to your installed version:
 
+## 0.10.0b2 (pre-release)
+
+### ⚠️ Behaviour change: boiler entities when the boiler is offline
+When the cloud reports the boiler as not connected (`boiler.online` in the
+thermostat data, like the official app), the boiler entities become
+**unavailable** instead of showing the last values the cloud no longer
+updates:
+
+| Entity | Boiler offline |
+|---|---|
+| Pressure, Water (flow) Temperature, Outdoor Temperature, Modulation | unavailable |
+| Flame, Circulator, DHW Tap | unavailable |
+| Water Heater | unavailable |
+| Technical data, buttons, thermostats, thermostat temperature and battery | unchanged |
+| Thermostat settings (curve, flow temperatures, influence) | unchanged (unavailable at once, as before) |
+| Climatic curve chart | *boiler unreachable* with the same rule as the boiler entities |
+
+- Offline only after **240 s** of consecutive offline reports, so a single
+  reading changes nothing; back at the first online report. Not remembered
+  across a restart.
+- If the cloud does not report the boiler state, nothing changes.
+- **Check automations on these entities**: they may now see `unavailable`.
+  Commands to the Water Heater while it is unavailable are ignored by Home
+  Assistant (warning in the log, no error); one that arrives just as the
+  boiler goes offline is refused with a clear message.
+- Entity ids are unchanged. No extra requests to the cloud.
+- Diagnostics show the boiler state of each WiFi box.
+
 ## 0.10.0b1 (pre-release)
 
 ### ⚠️ Breaking changes: thermostat presets and attributes renamed

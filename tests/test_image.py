@@ -20,6 +20,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
+from custom_components.besmart_thermostat import coordinator as coordinator_module
 from custom_components.besmart_thermostat import curve_chart
 from custom_components.besmart_thermostat.const import DOMAIN
 
@@ -238,9 +239,22 @@ async def test_missing_unit_is_celsius(hass, chart_cloud):
     assert hass.states.get(chart_id(hass)).attributes["status"] == "ok"
 
 
-async def test_boiler_offline(hass, chart_cloud):
-    update(chart_cloud, "Thermostats/data", boiler={"online": "0"})
+async def test_boiler_offline(hass, chart_cloud, monkeypatch):
+    # PATCH 0.10: the chart follows the boiler state confirmed for the box
+    # (offline after BOILER_OFFLINE_CONFIRM seconds), like the boiler sensors.
+    clock = [1000.0]
+    monkeypatch.setattr(coordinator_module, "monotonic", lambda: clock[0])
     entry = await setup_entry(hass, "it")
+    update(chart_cloud, "Thermostats/data", boiler={"online": "0"})
+    await refresh(hass, entry)
+    # One offline cycle: points still drawn, outdoor sensor unchanged; the
+    # settings entities follow the thermostat read at once.
+    assert hass.states.get(chart_id(hass)).attributes["status"] == "ok"
+    assert hass.states.get(entity_id_of(hass, ":outdoor_probe_temp")).state == "15.3"
+    assert hass.states.get(entity_id_of(hass, ":r1_max_heating_set_point")).state == STATE_UNAVAILABLE
+
+    clock[0] += coordinator_module.BOILER_OFFLINE_CONFIRM
+    await refresh(hass, entry)
     state = hass.states.get(chart_id(hass))
     assert state.state != STATE_UNAVAILABLE
     assert state.attributes["status"] == "boiler_offline"
@@ -251,14 +265,22 @@ async def test_boiler_offline(hass, chart_cloud):
     assert drawn(root, "polyline", "sel") and drawn(root, "line", "max") and drawn(root, "line", "min")
     assert not drawn(root, "circle", "work") and not drawn(root, "circle", "req")
     assert "T esterna: caldaia non raggiungibile" in texts(root)
-    # The settings entities are unavailable, the outdoor sensor is unchanged (A).
-    assert hass.states.get(entity_id_of(hass, ":r1_max_heating_set_point")).state == STATE_UNAVAILABLE
-    assert hass.states.get(entity_id_of(hass, ":outdoor_probe_temp")).state == "15.3"
+    # Same confirmed state: the outdoor sensor is unavailable too.
+    assert hass.states.get(entity_id_of(hass, ":outdoor_probe_temp")).state == STATE_UNAVAILABLE
     # Back online: redrawn with the points.
     update(chart_cloud, "Thermostats/data", boiler={"online": "1"})
     await refresh(hass, entry)
     assert hass.states.get(chart_id(hass)).attributes["status"] == "ok"
     assert drawn(await svg_of(hass), "circle", "work")
+
+
+async def test_boiler_online_missing_keeps_previous_rule(hass, chart_cloud):
+    """No boiler.online in the reads: as before 0.10 (thermostat read, then
+    Wifi_boxes/data), while the boiler sensors stay available."""
+    update(chart_cloud, "Thermostats/data", boiler=None)
+    await setup_entry(hass, "it")
+    assert hass.states.get(chart_id(hass)).attributes["status"] == "boiler_offline"
+    assert hass.states.get(entity_id_of(hass, ":outdoor_probe_temp")).state == "15.3"
 
 
 async def test_unavailable_without_thermostat_data(hass, chart_cloud):

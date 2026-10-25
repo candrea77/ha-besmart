@@ -248,7 +248,9 @@ ever written.
   room)*. The chart does not assume whether the boiler applies the room
   influence before or after the min/max limits.
 - No points without a valid outdoor temperature, or while the boiler is
-  offline (*boiler unreachable*; curve and limits stay). Thermostats or
+  offline (*boiler unreachable*; curve and limits stay; since 0.10.0 with
+  the same rule as the boiler entities, see
+  [Boiler offline](#boiler-offline)). Thermostats or
   boilers not set to °C show *unsupported unit* and no curves.
 - The flow axis goes from 20 °C to the max flow temperature + 15 °C (at
   least 50 °C, rounded up to the next 10; 100 °C without a max), and starts
@@ -270,6 +272,36 @@ ever written.
 - **Light and dark colours follow the operating system / browser setting,
   not the Home Assistant theme.** The chart has its own neutral background,
   so it stays readable with either theme.
+
+### Boiler offline
+
+Since 0.10.0, when the BeSMART cloud reports that the boiler is not
+connected to the WiFi box (`boiler.online` in the thermostat data, the same
+information the official app uses), the boiler entities become
+**unavailable** instead of showing the last values, which the cloud no
+longer updates.
+
+| Entity | Boiler offline |
+|---|---|
+| Boiler System Pressure, Boiler Water Temperature, Outdoor Temperature, Boiler Modulation | unavailable |
+| Boiler Flame, Boiler Circulator, DHW Tap | unavailable |
+| Water Heater | unavailable |
+| Technical data, Read technical data, Refresh now | unchanged (the technical data is a stored reading with its time) |
+| Thermostat, Temperature, Thermostat Battery Status | unchanged (the thermostat talks to the WiFi box, not to the boiler) |
+| Climatic Curve, Max/Min Flow Temperature, Room Sensor Influence | unavailable, as before (immediately, like the official app) |
+| Climatic curve chart | stays available, shows *boiler unreachable* without points |
+
+- The boiler is considered offline only when the cloud keeps reporting it
+  for **at least 4 minutes** (240 s, several consecutive updates), so a
+  single offline reading changes nothing. Entities come back at the first
+  update that reports the boiler online again. Nothing is remembered across
+  a restart.
+- If the cloud does not report the boiler state at all, nothing changes.
+- While the Water Heater is unavailable, Home Assistant ignores commands
+  sent to it (only a warning in the log, no error in automations). A
+  command that arrives just as the boiler goes offline is refused with
+  *The boiler is offline: domestic hot water cannot be changed.*
+- No extra requests to the cloud.
 
 ### Supported languages
 
