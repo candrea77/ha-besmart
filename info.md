@@ -21,11 +21,12 @@ updates:
   reading changes nothing; back at the first online report. Not remembered
   across a restart.
 - If the cloud does not report the boiler state, nothing changes.
-- The offline state depends only on `boiler.online` reported by the cloud.
-  With the OpenTherm bus between the WiFi box and the boiler disconnected
-  the cloud does **not** report it (tested for 21 minutes: `boiler.online`
-  stayed "1"), so the boiler entities keep showing the last values; only
-  Modulation is unknown while its endpoint answers with an error.
+- The offline state depends only on what the cloud reports. If the boiler
+  is switched off or the OpenTherm link between the WiFi box and the
+  boiler is interrupted, the cloud reports it with an unpredictable delay
+  (from a few minutes to more than 20 in our tests). Until it does, the
+  integration shows the last values received; once it does, the boiler
+  entities become unavailable after about 5 minutes.
 - **Check automations on these entities** (Circulator, Flame, DHW Tap,
   Pressure, Outdoor Temperature, Water Heater…): they will see the state
   `unavailable`. Triggers with `from: "on"` or without `to:` also fire on
