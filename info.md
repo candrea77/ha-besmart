@@ -21,8 +21,12 @@ updates:
   reading changes nothing; back at the first online report. Not remembered
   across a restart.
 - If the cloud does not report the boiler state, nothing changes.
-- **Check automations on these entities**: they may now see `unavailable`.
-  Commands to the Water Heater while it is unavailable are ignored by Home
+- **Check automations on these entities** (Circulator, Flame, DHW Tap,
+  Pressure, Outdoor Temperature, Water Heater…): they will see the state
+  `unavailable`. Triggers with `from: "on"` or without `to:` also fire on
+  the change to `unavailable` (and back): add an explicit `to:` or a
+  condition.
+- Commands to the Water Heater while it is unavailable are ignored by Home
   Assistant (warning in the log, no error); one that arrives just as the
   boiler goes offline is refused with a clear message.
 - Entity ids are unchanged. No extra requests to the cloud.
