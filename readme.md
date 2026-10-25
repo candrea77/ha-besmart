@@ -297,6 +297,12 @@ longer updates.
   update that reports the boiler online again. Nothing is remembered across
   a restart.
 - If the cloud does not report the boiler state at all, nothing changes.
+- The offline state depends only on `boiler.online` reported by the cloud.
+  **With the OpenTherm bus between the WiFi box and the boiler
+  disconnected, the cloud does not report it** (tested for 21 minutes:
+  `boiler.online` stayed "1"), so the boiler entities keep showing the
+  last values; only Boiler Modulation is unknown while its endpoint
+  answers with an error.
 - While the Water Heater is unavailable, Home Assistant ignores commands
   sent to it (only a warning in the log, no error in automations). A
   command that arrives just as the boiler goes offline is refused with
