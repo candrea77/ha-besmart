@@ -1,6 +1,39 @@
 ## Changes as compared to your installed version:
 
-## 0.10.0b2 (pre-release)
+## 0.10.0
+
+### ⚠️ Breaking changes: thermostat presets and attributes renamed
+Home Assistant can only translate lowercase values, so the thermostat
+presets and two attributes have new names (translated in English and
+Italian):
+
+| Before | Now | BeSMART app |
+|---|---|---|
+| preset `AUTO` | `auto` | Auto |
+| preset `MANUAL` | `manual` | Manuale - Comfort |
+| preset `ECO` | `away` (Home Assistant standard preset) | Vacanza - Economy |
+| preset `PARTY` | `party` | Party - Comfort |
+| preset `IDLE` | `frost_protection` | Spento - Antigelo |
+| preset `DHW` (hidden, used to turn off) | not a preset: `climate.turn_off` or `hvac_mode: off` | Sanitario |
+| attribute `setpoint_OT` | `ot_set_point` | |
+| attribute `confort_temp` | `comfort_temp` (typo fixed) | |
+
+- **Check automations, scripts, scenes, templates, dashboard cards and
+  blueprints** that use `preset_mode`, `preset_modes`, `setpoint_OT` or
+  `confort_temp`.
+- Triggers and conditions with the old values **stop matching without any
+  error**; `climate.set_preset_mode` calls with the old values fail with
+  "invalid preset" (Home Assistant checks the value before the
+  integration sees it, so the old values cannot be accepted any more).
+- The numeric `mode` attribute (0–5) is unchanged: use it for automations
+  that do not depend on preset names.
+- Entity ids and unique ids are unchanged. The history keeps the old values
+  until the update.
+- A notice in **Settings → Repairs** shows the same table once, after the
+  update; confirm it to close it. New installations do not get it.
+- Going back to 0.9.x is possible (the config entry only gets a new minor
+  version); if the notice was still open, 0.9.x shows it without text:
+  close it with *Ignore*.
 
 ### ⚠️ Behaviour change: boiler entities when the boiler is offline
 When the cloud reports the boiler as not connected (`boiler.online` in the
@@ -37,41 +70,6 @@ updates:
   boiler goes offline is refused with a clear message.
 - Entity ids are unchanged. No extra requests to the cloud.
 - Diagnostics show the boiler state of each WiFi box.
-
-## 0.10.0b1 (pre-release)
-
-### ⚠️ Breaking changes: thermostat presets and attributes renamed
-Home Assistant can only translate lowercase values, so the thermostat
-presets and two attributes have new names (translated in English and
-Italian):
-
-| Before | Now | BeSMART app |
-|---|---|---|
-| preset `AUTO` | `auto` | Auto |
-| preset `MANUAL` | `manual` | Manuale - Comfort |
-| preset `ECO` | `away` (Home Assistant standard preset) | Vacanza - Economy |
-| preset `PARTY` | `party` | Party - Comfort |
-| preset `IDLE` | `frost_protection` | Spento - Antigelo |
-| preset `DHW` (hidden, used to turn off) | not a preset: `climate.turn_off` or `hvac_mode: off` | Sanitario |
-| attribute `setpoint_OT` | `ot_set_point` | |
-| attribute `confort_temp` | `comfort_temp` (typo fixed) | |
-
-- **Check automations, scripts, scenes, templates, dashboard cards and
-  blueprints** that use `preset_mode`, `preset_modes`, `setpoint_OT` or
-  `confort_temp`.
-- Triggers and conditions with the old values **stop matching without any
-  error**; `climate.set_preset_mode` calls with the old values fail with
-  "invalid preset" (Home Assistant checks the value before the
-  integration sees it, so the old values cannot be accepted any more).
-- The numeric `mode` attribute (0–5) is unchanged: use it for automations
-  that do not depend on preset names.
-- Entity ids and unique ids are unchanged. The history keeps the old values
-  until the update.
-- A notice in **Settings → Repairs** shows the same table once, after the
-  update; confirm it to close it. New installations do not get it.
-- Going back to 0.9.x is possible (the config entry only gets a new minor
-  version); if the notice was still open, 0.9.x shows it without text:
-  close it with *Ignore*.
 
 ### Other
 - Each preset has its own icon.
