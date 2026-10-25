@@ -22,9 +22,10 @@ Italian):
   blueprints** that use `preset_mode`, `preset_modes`, `setpoint_OT` or
   `confort_temp`.
 - Triggers and conditions with the old values **stop matching without any
-  error**; `climate.set_preset_mode` calls with the old values fail with
-  "invalid preset" (Home Assistant checks the value before the
-  integration sees it, so the old values cannot be accepted any more).
+  error**; `climate.set_preset_mode` calls with the old values fail with a
+  Home Assistant error that lists the valid presets (Home Assistant checks
+  the value before the integration sees it, so the old values cannot be
+  accepted any more).
 - The numeric `mode` attribute (0–5) is unchanged: use it for automations
   that do not depend on preset names.
 - Entity ids and unique ids are unchanged. The history keeps the old values
@@ -47,7 +48,7 @@ updates:
 | Flame, Circulator, DHW Tap | unavailable |
 | Water Heater | unavailable |
 | Technical data, buttons, thermostats, thermostat temperature and battery | unchanged |
-| Thermostat settings (curve, flow temperatures, influence) | unchanged (unavailable at once, as before) |
+| Thermostat settings (curve, flow temperatures, influence) | unavailable at once, as before (like the official app) |
 | Climatic curve chart | *boiler unreachable* with the same rule as the boiler entities |
 
 - Offline only after **240 s** of consecutive offline reports, so a single
@@ -68,7 +69,7 @@ updates:
 - Commands to the Water Heater while it is unavailable are ignored by Home
   Assistant (warning in the log, no error); one that arrives just as the
   boiler goes offline is refused with a clear message.
-- Entity ids are unchanged. No extra requests to the cloud.
+- Entity ids are unchanged.
 - Diagnostics show the boiler state of each WiFi box.
 
 ### Other
