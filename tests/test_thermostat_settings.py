@@ -22,6 +22,7 @@ from custom_components.besmart_thermostat.api import (
     BesmartValidationError,
 )
 from custom_components.besmart_thermostat.const import DOMAIN
+from custom_components.besmart_thermostat.coordinator import BoilerLink
 
 from .conftest import PASSWORD, USER_ID, USERNAME, WIFI_BOX
 from .test_setup_and_flows import OPTIONS, _custom_integrations, assert_no_secrets, cloud  # noqa: F401
@@ -327,6 +328,10 @@ async def test_one_write_at_a_time_per_thermostat(make_coordinator, no_verify_de
         (None, {"id": 1, "online": "1"}, True),  # fallback: Wifi_boxes/data
         (None, {"id": 1}, False),
         (None, None, False),
+        # PATCH 0.10: a boiler object without "online" does not fall back,
+        # and the thermostat's own top-level "Online" is ignored.
+        ({"id": 1}, {"id": 1, "online": "1"}, False),
+        ({"online": "0", "Online": "1"}, {"id": 1}, False),
     ],
 )
 def test_boiler_online(make_coordinator, thermostat_boiler, topology_boiler, online):
@@ -336,7 +341,8 @@ def test_boiler_online(make_coordinator, thermostat_boiler, topology_boiler, onl
     if thermostat_boiler is not None:
         data["boiler"] = thermostat_boiler
     co.data = {WIFI_BOX: {"boiler": {}, "thermostats": {ROOM: data}}}
-    assert co.boiler_online(WIFI_BOX, ROOM) is online
+    # PATCH 0.10: boiler_link(wifi_box, room_id) replaces boiler_online().
+    assert (co.boiler_link(WIFI_BOX, ROOM) is BoilerLink.ONLINE) is online
 
 
 # --------------------------------------------------------- Home Assistant

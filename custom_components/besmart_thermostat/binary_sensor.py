@@ -25,9 +25,9 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import BesmartDataUpdateCoordinator
+from .entity import BesmartBoilerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,10 +59,9 @@ async def async_setup_entry(
         async_add_entities(new_entities)
 
 
-class BesmartBoilerBinarySensor(
-    CoordinatorEntity[BesmartDataUpdateCoordinator], BinarySensorEntity
-):
-    """Base class for boiler-derived binary sensors."""
+class BesmartBoilerBinarySensor(BesmartBoilerEntity, BinarySensorEntity):
+    """Base class for boiler-derived binary sensors (PATCH 0.10: unavailable
+    while the boiler is offline, see BesmartBoilerEntity)."""
 
     _attr_has_entity_name = True
 
@@ -75,10 +74,6 @@ class BesmartBoilerBinarySensor(
         self._wifi_box = wifi_box
         self._attr_unique_id = f"{config_entry.entry_id}:{wifi_box}:{self.DATA_KEY}"
         self._attr_device_info = device_info
-
-    @property
-    def available(self) -> bool:
-        return super().available and self.coordinator.boiler_data(self._wifi_box) is not None
 
     @property
     def is_on(self):

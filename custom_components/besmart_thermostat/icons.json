@@ -1,0 +1,20 @@
+{
+    "entity": {
+        "climate": {
+            "thermostat": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "default": "mdi:thermostat",
+                        "state": {
+                            "auto": "mdi:calendar-clock",
+                            "manual": "mdi:hand-back-right",
+                            "away": "mdi:bag-suitcase",
+                            "party": "mdi:party-popper",
+                            "frost_protection": "mdi:snowflake-thermometer"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

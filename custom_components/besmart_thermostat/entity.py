@@ -1,5 +1,9 @@
 """PATCH 0.8: base class of the per-thermostat settings entities.
 
+PATCH 0.10: also BesmartBoilerEntity, base of the boiler entities, which
+are unavailable while the boiler is confirmed offline
+(candrea77/ha-besmart#10).
+
 Climatic curve (select), max/min flow temperature and room sensor influence
 (number): installer parameters written with PUT Thermostats/setting through
 BesmartDataUpdateCoordinator.async_set_thermostat_settings(). Values come
@@ -14,7 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import parse_value
 from .const import DOMAIN
-from .coordinator import BesmartDataUpdateCoordinator
+from .coordinator import BesmartDataUpdateCoordinator, BoilerLink
 
 
 def thermostat_setting_entities(coordinator: BesmartDataUpdateCoordinator, config_entry: ConfigEntry, classes):
@@ -60,13 +64,17 @@ class BesmartThermostatSettingEntity(CoordinatorEntity[BesmartDataUpdateCoordina
         return (
             super().available
             and self.coordinator.boiler_data(self._wifi_box) is not None
-            and self.coordinator.boiler_online(self._wifi_box, self._room_id)
+            and self._boiler_online()
             and self._value is not None
         )
 
+    def _boiler_online(self) -> bool:
+        """PATCH 0.10: this thermostat's read, immediately (missing = offline)."""
+        return self.coordinator.boiler_link(self._wifi_box, self._room_id) is BoilerLink.ONLINE
+
     def _check_online(self) -> None:
         """Refuse a change while the boiler is offline."""
-        if not self.coordinator.boiler_online(self._wifi_box, self._room_id):
+        if not self._boiler_online():
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="boiler_offline",
@@ -80,3 +88,32 @@ class BesmartThermostatSettingEntity(CoordinatorEntity[BesmartDataUpdateCoordina
             self._wifi_box, self._room_id, self._room_name, {self.FIELD: value}
         )
         await self.coordinator.async_request_refresh()
+
+
+class BesmartBoilerEntity(CoordinatorEntity[BesmartDataUpdateCoordinator]):
+    """PATCH 0.10: base of the entities fed by the boiler data of a wifi box.
+
+    Unavailable while the coordinator says the boiler is confirmed offline
+    (boiler_entity_available(), the single rule shared with 0.11.0), so
+    values the cloud no longer updates are not shown as current.
+    """
+
+    # Cloud field of the entity, passed to boiler_entity_available().
+    DATA_KEY: str = ""
+    # False when the entity has a value without the boiler payload
+    # (modulation: its own endpoint, unknown when the read fails).
+    REQUIRES_BOILER_DATA = True
+
+    _wifi_box: str
+
+    @property
+    def available(self) -> bool:
+        """Coordinator ok, boiler data present, boiler not offline."""
+        return (
+            super().available
+            and (
+                not self.REQUIRES_BOILER_DATA
+                or self.coordinator.boiler_data(self._wifi_box) is not None
+            )
+            and self.coordinator.boiler_entity_available(self._wifi_box, self.DATA_KEY)
+        )

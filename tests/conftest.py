@@ -171,6 +171,10 @@ def make_coordinator(make_client):
         coordinator._settings_locks = {}
         coordinator._manual_refresh_lock = asyncio.Lock()
         coordinator._last_manual_refresh = None
+        # PATCH 0.10: boiler link state.
+        coordinator._boiler_raw = {}
+        coordinator._boiler_link = {}
+        coordinator._offline_since = {}
         coordinator.last_update_success = True
         coordinator.last_exception = None
         coordinator.listener_updates = 0

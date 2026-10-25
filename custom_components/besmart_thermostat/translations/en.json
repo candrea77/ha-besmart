@@ -86,6 +86,17 @@
         "tls_certificate_error": {
             "title": "BeSMART cloud certificate could not be verified ({name})",
             "description": "Home Assistant could not verify the TLS certificate of the BeSMART cloud for {name}, so it did not send your credentials. If the problem persists and you trust your network, you can disable 'Verify TLS certificate' in the integration options (not recommended)."
+        },
+        "presets_renamed": {
+            "title": "BeSMART presets and attributes renamed ({name})",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "BeSMART presets and attributes renamed",
+                        "description": "The thermostats of {name} now use new preset and attribute names, so that Home Assistant can translate them.\n\n| Before | Now |\n|---|---|\n| `AUTO` | `auto` |\n| `MANUAL` | `manual` |\n| `ECO` | `away` |\n| `PARTY` | `party` |\n| `IDLE` | `frost_protection` |\n| `DHW` (off) | not a preset any more: use `climate.turn_off` |\n| attribute `setpoint_OT` | `ot_set_point` |\n| attribute `confort_temp` | `comfort_temp` |\n\nCheck automations, scripts, scenes, templates and dashboards that use the old values: triggers and conditions with the old values stop matching without any error, and `climate.set_preset_mode` calls with the old values fail as an invalid preset. The numeric `mode` attribute (0-5) and the entity IDs are unchanged.\n\nSubmit to close this notice."
+                    }
+                }
+            }
         }
     },
     "entity": {
@@ -123,6 +134,9 @@
                     "mode": {
                         "name": "BeSMART mode"
                     },
+                    "ot_set_point": {
+                        "name": "OpenTherm set point"
+                    },
                     "battery_low": {
                         "name": "Battery low"
                     },
@@ -132,11 +146,19 @@
                     "economy_temp": {
                         "name": "Economy temperature"
                     },
-                    "confort_temp": {
+                    "comfort_temp": {
                         "name": "Comfort temperature"
                     },
                     "updating_temp": {
                         "name": "Temperature update in progress"
+                    },
+                    "preset_mode": {
+                        "state": {
+                            "auto": "Auto",
+                            "manual": "Manual",
+                            "party": "Party",
+                            "frost_protection": "Frost protection"
+                        }
                     }
                 }
             }
@@ -325,6 +347,9 @@
         "boiler_offline": {
             "message": "The boiler is offline: the settings of thermostat {room} cannot be changed."
         },
+        "boiler_offline_dhw": {
+            "message": "The boiler is offline: domestic hot water cannot be changed."
+        },
         "settings_read_failed": {
             "message": "Could not read the current settings of thermostat {room} from the BeSMART cloud. Nothing was sent."
         },
@@ -336,6 +361,9 @@
         },
         "settings_not_confirmed": {
             "message": "The BeSMART cloud did not confirm the new settings of thermostat {room}. Check the values in the Riello app."
+        },
+        "invalid_preset": {
+            "message": "{preset} is not a valid BeSMART preset."
         }
     }
 }

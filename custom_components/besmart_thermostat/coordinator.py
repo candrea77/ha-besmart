@@ -23,6 +23,13 @@ PATCH 0.7:
 - async_manual_refresh() backs the "Refresh now" button: one refresh at a time
   and presses within MANUAL_REFRESH_COOLDOWN seconds are ignored.
 
+PATCH 0.10 (candrea77/ha-besmart#10): boiler link state per wifi box, from
+``boiler.online`` (lowercase key inside the ``boiler`` object) of the
+thermostat reads; ``Boilers/data`` has no such key and the top-level
+``Online`` of a thermostat read is the thermostat's own state. Offline is
+confirmed only after BOILER_OFFLINE_CONFIRM seconds of consecutive offline
+cycles (see boiler_link()).
+
 data layout:
     {
         <wifi_box_id>: {
@@ -39,6 +46,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from enum import StrEnum
 from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
@@ -99,7 +107,41 @@ TECHNICAL_READ_COOLDOWN = 30
 SETTINGS_VERIFY_RETRIES = 2
 SETTINGS_VERIFY_DELAY = 3
 
+# PATCH 0.10: seconds of consecutive offline reads before the boiler is
+# considered offline (cloud refresh ~3 min + margin), independent of the
+# polling interval and of "Refresh now".
+BOILER_OFFLINE_CONFIRM = 240
+
 type BesmartData = dict[str, dict]
+
+
+class BoilerLink(StrEnum):
+    """PATCH 0.10: boiler reachability as reported by the cloud."""
+
+    ONLINE = "online"
+    OFFLINE = "offline"
+    UNKNOWN = "unknown"  # no read contains boiler.online
+
+
+def _read_link(data) -> BoilerLink:
+    """Link of one thermostat read: boiler.online (exact lowercase key)."""
+    # Never the top-level "Online" of the thermostat read: that is the
+    # thermostat's own state, not the boiler's.
+    boiler = data.get("boiler") if isinstance(data, dict) else None
+    if not isinstance(boiler, dict) or "online" not in boiler:
+        return BoilerLink.UNKNOWN
+    return BoilerLink.ONLINE if str(boiler["online"]).strip() == "1" else BoilerLink.OFFLINE
+
+
+def _box_link(reads) -> BoilerLink:
+    """Raw link of a wifi box: online if any read says "1", offline if some
+    read has the key and none says "1", unknown otherwise."""
+    links = {_read_link(data) for data in reads}
+    if BoilerLink.ONLINE in links:
+        return BoilerLink.ONLINE
+    if BoilerLink.OFFLINE in links:
+        return BoilerLink.OFFLINE
+    return BoilerLink.UNKNOWN
 
 
 def _same_setting(read, sent) -> bool:
@@ -153,6 +195,12 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         # PATCH 0.7: "Refresh now" button state.
         self._manual_refresh_lock = asyncio.Lock()
         self._last_manual_refresh: float | None = None
+        # PATCH 0.10: per wifi box, raw link of the last cycle with fresh
+        # thermostat reads, confirmed link and start of the offline streak
+        # (monotonic). In memory only: after a restart nothing is confirmed.
+        self._boiler_raw: dict[str, BoilerLink] = {}
+        self._boiler_link: dict[str, BoilerLink] = {}
+        self._offline_since: dict[str, float] = {}
         super().__init__(
             hass,
             _LOGGER,
@@ -207,13 +255,19 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
                 boiler = prev_box.get("boiler")
 
             thermostats: dict[str, dict] = {}
+            fresh: list[dict] = []
             for room_id, data in zip(room_ids, responses[1 : 1 + len(room_ids)]):
                 if isinstance(data, Exception) or data is None:
                     data = prev_box.get("thermostats", {}).get(room_id)
                 elif isinstance(data, dict):
                     data = self._sanitize_thermostat(wifi_box, room_id, data)
+                    fresh.append(data)
                 if data is not None:
                     thermostats[room_id] = data
+            # PATCH 0.10: only fresh reads count (a failed read reuses the
+            # previous data: it neither confirms nor clears offline).
+            if fresh:
+                self._update_boiler_link(wifi_box, _box_link(fresh))
 
             # PATCH 0.7: optional; failure -> None (unknown), no stale value.
             modulation = None
@@ -313,18 +367,77 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
         """Return the latest boiler data dict for a wifi box, or None."""
         return (self.data or {}).get(wifi_box, {}).get("boiler")
 
-    def boiler_online(self, wifi_box: str, room_id: str) -> bool:
-        """PATCH 0.8: boiler.online == "1", like the official app.
+    def _update_boiler_link(self, wifi_box: str, raw: BoilerLink) -> None:
+        """PATCH 0.10: confirm offline after BOILER_OFFLINE_CONFIRM seconds.
 
-        Taken from the latest thermostat read (it embeds the boiler); the
-        Wifi_boxes/data read done at setup is the fallback.
+        Online and unknown apply at once (unknown also ends an offline
+        streak); offline only when it is still reported in a cycle at least
+        BOILER_OFFLINE_CONFIRM seconds after the first offline cycle.
         """
+        self._boiler_raw[wifi_box] = raw
+        previous = self._boiler_link.get(wifi_box, BoilerLink.UNKNOWN)
+        if raw is BoilerLink.OFFLINE:
+            now = monotonic()
+            since = self._offline_since.setdefault(wifi_box, now)
+            confirmed = BoilerLink.OFFLINE if now - since >= BOILER_OFFLINE_CONFIRM else previous
+        else:
+            self._offline_since.pop(wifi_box, None)
+            confirmed = raw
+        self._boiler_link[wifi_box] = confirmed
+        if confirmed is not previous:
+            _LOGGER.debug(
+                "boiler of %s: %s -> %s",
+                self.client.mask_wifi_box(wifi_box),
+                previous,
+                confirmed,
+            )
+
+    def boiler_link(self, wifi_box: str, room_id: str | None = None) -> BoilerLink:
+        """PATCH 0.10: boiler reachability (replaces boiler_online()).
+
+        Without room_id: the wifi box state confirmed by _update_boiler_link()
+        (boiler entities, climatic curve chart). With room_id: that
+        thermostat's latest read, immediately, with the Wifi_boxes/data read
+        done at setup as fallback (thermostat settings, PATCH 0.8: like the
+        official app, writable only when "1").
+        """
+        if room_id is None:
+            return self._boiler_link.get(wifi_box, BoilerLink.UNKNOWN)
         boiler = (self.thermostat_data(wifi_box, room_id) or {}).get("boiler")
         if not isinstance(boiler, dict):
             boiler = next(
                 (d.boiler for d in self.interface_devices if d.wifi_box == wifi_box), None
             )
-        return isinstance(boiler, dict) and str(boiler.get("online", "")).strip() == "1"
+        return _read_link({"boiler": boiler})
+
+    def boiler_link_raw(self, wifi_box: str) -> BoilerLink:
+        """PATCH 0.10: link of the last cycle with fresh reads, unconfirmed."""
+        return self._boiler_raw.get(wifi_box, BoilerLink.UNKNOWN)
+
+    def boiler_entity_available(self, wifi_box: str, key: str) -> bool:
+        """PATCH 0.10: the single availability rule of the boiler entities.
+
+        False only while the boiler is confirmed offline; a missing
+        boiler.online changes nothing. ``key`` (cloud field of the entity)
+        is unused for now: 0.11.0 (candrea77/ha-besmart#11) may keep an
+        entity available when the local OpenTherm gateway has a valid value
+        for it.
+        """
+        return self.boiler_link(wifi_box) is not BoilerLink.OFFLINE
+
+    def boiler_link_diagnostics(self) -> dict[str, dict]:
+        """PATCH 0.10: raw/confirmed link per wifi box, for diagnostics."""
+        now = monotonic()
+        return {
+            box: {
+                "raw": self.boiler_link_raw(box).value,
+                "confirmed": self.boiler_link(box).value,
+                "offline_seconds": (
+                    round(now - self._offline_since[box]) if box in self._offline_since else None
+                ),
+            }
+            for box in (d.wifi_box for d in self.interface_devices)
+        }
 
     async def async_set_thermostat_settings(
         self, wifi_box: str, room_id: str, room_name: str, changes: dict

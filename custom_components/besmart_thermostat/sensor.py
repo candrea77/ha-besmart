@@ -36,6 +36,7 @@ from homeassistant.util import dt as dt_util
 
 from .api import parse_value
 from .coordinator import BesmartDataUpdateCoordinator
+from .entity import BesmartBoilerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -197,8 +198,9 @@ class ThermostatTemperatureSensor(CoordinatorEntity[BesmartDataUpdateCoordinator
         return UnitOfTemperature.FAHRENHEIT
 
 
-class BesmartBoilerSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], SensorEntity):
-    """Base class for boiler-derived sensors."""
+class BesmartBoilerSensor(BesmartBoilerEntity, SensorEntity):
+    """Base class for boiler-derived sensors (PATCH 0.10: unavailable while
+    the boiler is offline, see BesmartBoilerEntity)."""
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -212,10 +214,6 @@ class BesmartBoilerSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], Senso
         self._wifi_box = wifi_box
         self._attr_unique_id = f"{config_entry.entry_id}:{wifi_box}:{self.DATA_KEY}"
         self._attr_device_info = device_info
-
-    @property
-    def available(self) -> bool:
-        return super().available and self.coordinator.boiler_data(self._wifi_box) is not None
 
     @property
     def native_value(self):
@@ -278,13 +276,16 @@ class BoilerWaterTemperatureSensor(BesmartBoilerSensor):
         return UnitOfTemperature.FAHRENHEIT
 
 
-class BoilerModulationSensor(CoordinatorEntity[BesmartDataUpdateCoordinator], SensorEntity):
+class BoilerModulationSensor(BesmartBoilerEntity, SensorEntity):
     """PATCH 0.7: burner modulation ratio (Boilers/modulation_ratio).
 
     Invalid values (empty/null/DNCON/disable) and failed reads are unknown;
-    "0.0" is a valid 0 %. The entity is unavailable only when the whole
-    coordinator update fails.
+    "0.0" is a valid 0 %. The entity is unavailable when the whole
+    coordinator update fails and (PATCH 0.10) while the boiler is offline.
     """
+
+    DATA_KEY = "modulation_ratio"
+    REQUIRES_BOILER_DATA = False
 
     _attr_has_entity_name = True
     _attr_translation_key = "modulation"  # PATCH 0.7.1: was "Boiler Modulation"

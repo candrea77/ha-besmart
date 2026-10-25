@@ -1,5 +1,85 @@
 ## Changes as compared to your installed version:
 
+## 0.10.0
+
+### ⚠️ Breaking changes: thermostat presets and attributes renamed
+Home Assistant can only translate lowercase values, so the thermostat
+presets and two attributes have new names (translated in English and
+Italian):
+
+| Before | Now | BeSMART app |
+|---|---|---|
+| preset `AUTO` | `auto` | Auto |
+| preset `MANUAL` | `manual` | Manuale - Comfort |
+| preset `ECO` | `away` (Home Assistant standard preset) | Vacanza - Economy |
+| preset `PARTY` | `party` | Party - Comfort |
+| preset `IDLE` | `frost_protection` | Spento - Antigelo |
+| preset `DHW` (hidden, used to turn off) | not a preset: `climate.turn_off` or `hvac_mode: off` | Sanitario |
+| attribute `setpoint_OT` | `ot_set_point` | |
+| attribute `confort_temp` | `comfort_temp` (typo fixed) | |
+
+- **Check automations, scripts, scenes, templates, dashboard cards and
+  blueprints** that use `preset_mode`, `preset_modes`, `setpoint_OT` or
+  `confort_temp`.
+- Triggers and conditions with the old values **stop matching without any
+  error**; `climate.set_preset_mode` calls with the old values fail with a
+  Home Assistant error that lists the valid presets (Home Assistant checks
+  the value before the integration sees it, so the old values cannot be
+  accepted any more).
+- The numeric `mode` attribute (0–5) is unchanged: use it for automations
+  that do not depend on preset names.
+- Entity ids and unique ids are unchanged. The history keeps the old values
+  until the update.
+- A notice in **Settings → Repairs** shows the same table once, after the
+  update; confirm it to close it. New installations do not get it.
+- Going back to 0.9.x is possible (the config entry only gets a new minor
+  version); if the notice was still open, 0.9.x shows it without text:
+  close it with *Ignore*.
+
+### ⚠️ Behaviour change: boiler entities when the boiler is offline
+When the cloud reports the boiler as not connected (`boiler.online` in the
+thermostat data, like the official app), the boiler entities become
+**unavailable** instead of showing the last values the cloud no longer
+updates:
+
+| Entity | Boiler offline |
+|---|---|
+| Pressure, Water (flow) Temperature, Outdoor Temperature, Modulation | unavailable |
+| Flame, Circulator, DHW Tap | unavailable |
+| Water Heater | unavailable |
+| Technical data, buttons, thermostats, thermostat temperature and battery | unchanged |
+| Thermostat settings (curve, flow temperatures, influence) | unavailable at once, as before (like the official app) |
+| Climatic curve chart | *boiler unreachable* with the same rule as the boiler entities |
+
+- Offline only after **240 s** of consecutive offline reports, so a single
+  reading changes nothing; back at the first online report. Not remembered
+  across a restart.
+- If the cloud does not report the boiler state, nothing changes.
+- The offline state depends only on what the cloud reports. If the boiler
+  is switched off or the OpenTherm link between the WiFi box and the
+  boiler is interrupted, the cloud reports it with an unpredictable delay
+  (from a few minutes to more than 20 in our tests). Until it does, the
+  integration shows the last values received; once it does, the boiler
+  entities become unavailable after about 5 minutes.
+- **Check automations on these entities** (Circulator, Flame, DHW Tap,
+  Pressure, Outdoor Temperature, Water Heater…): they will see the state
+  `unavailable`. Triggers with `from: "on"` or without `to:` also fire on
+  the change to `unavailable` (and back): add an explicit `to:` or a
+  condition.
+- Commands to the Water Heater while it is unavailable are ignored by Home
+  Assistant (warning in the log, no error); one that arrives just as the
+  boiler goes offline is refused with a clear message.
+- Entity ids are unchanged.
+- Diagnostics show the boiler state of each WiFi box.
+
+### Other
+- Each preset has its own icon.
+- An unknown thermostat mode from the cloud no longer shows as `IDLE`: the
+  preset is empty (logged once).
+- Removed an unused internal holiday end time; the holiday end is not
+  available from the cloud.
+- No new requests to the cloud, nothing new is written.
+
 ## 0.9.0
 
 ### New: climatic curve chart
