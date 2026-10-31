@@ -64,7 +64,9 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
   everything once per cycle (`asyncio.gather` per wifi box). Entities read only
   from `coordinator.data`; they never call the API while polling.
 - Platforms: `climate`, `water_heater`, `sensor`, `binary_sensor`, `button`,
-  `number`, `select` (thermostat settings, base class in `entity.py`).
+  `number`, `select` (thermostat settings, base class in `entity.py`),
+  `image` (0.9.0: climatic curve chart per thermostat, `image.py`, drawn by
+  `curve_chart.py`; read only, no extra cloud calls).
 - Cloud responses look like `{"error_code": .., "status": true, "message": {...}}`.
   Invalid values: empty, `None`, `"null"`, `"DNCON"`, strings containing
   `disable`. Use `api.parse_value()`; `"0.0"` is a valid 0, not unknown.
