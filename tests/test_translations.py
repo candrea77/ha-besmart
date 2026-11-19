@@ -211,7 +211,14 @@ async def test_user_custom_name_is_kept(hass, cloud, language):
     await _setup(hass, language, entry)
     entity = registry.async_get("climate.casa_living_thermostat")
     assert entity.name == "Soggiorno"
-    assert hass.states.get("climate.casa_living_thermostat").attributes["friendly_name"] == "Soggiorno"
+    # PATCH 0.10.1: since Home Assistant 2026.11 (entity registry 1.24) the
+    # device name ("Living") also prefixes names set by the user; the
+    # registry migration keeps the full name of entities renamed before
+    # (compat_name). Our part: the user's name is kept as is.
+    assert (
+        hass.states.get("climate.casa_living_thermostat").attributes["friendly_name"]
+        == "Living Soggiorno"
+    )
 
 
 # ------------------------------------------------------- translation files

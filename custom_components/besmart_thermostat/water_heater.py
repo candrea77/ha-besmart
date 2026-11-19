@@ -168,8 +168,10 @@ class WaterHeater(BesmartBoilerEntity, WaterHeaterEntity, RestoreEntity):
 
         self._current_unit = boiler.get("unit", "0")
 
+    # PATCH 0.10.1: native_* temperature API (Home Assistant 2026.11; the old
+    # names stop working in 2027.11). Values and unit are unchanged.
     @property
-    def current_temperature(self):
+    def native_current_temperature(self):
         """Return the current temperature."""
         return self._current_temp
 
@@ -189,7 +191,7 @@ class WaterHeater(BesmartBoilerEntity, WaterHeaterEntity, RestoreEntity):
         return self.DHW_TEMP_PRECISION
 
     @property
-    def target_temperature(self):
+    def native_target_temperature(self):
         """Return the temperature we try to reach."""
         return self._tempSet
 
@@ -199,7 +201,7 @@ class WaterHeater(BesmartBoilerEntity, WaterHeaterEntity, RestoreEntity):
         return self.DHW_TEMP_STEP
 
     @property
-    def temperature_unit(self):
+    def native_temperature_unit(self):
         """Return the unit of measurement."""
         if self._current_unit == "0":
             return UnitOfTemperature.CELSIUS

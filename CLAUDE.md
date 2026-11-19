@@ -86,18 +86,21 @@ Home Assistant custom integration for Riello BeSMART thermostats/boilers
 - Comments mark changes with `PATCH x.y:`, matching the existing code.
 - On every release bump `version` in
   `custom_components/besmart_thermostat/manifest.json` and update `info.md`
-  (HACS release notes). Pre-releases use `X.Y.ZbN` and a `vX.Y.ZbN` tag
-  published as a GitHub pre-release.
+  (release notes; the Marketplace shows the GitHub release body in the
+  update dialog: copy the section there). Pre-releases use `X.Y.ZbN` and a
+  `vX.Y.ZbN` tag published as a GitHub pre-release.
 - Release branches are named `release-vX.Y`.
 - CI (`.github/workflows/combined.yaml`) runs hassfest, HACS validation and
   `pytest tests` on Python 3.14 against the minimum supported Home Assistant
-  (2026.7, pinned in the workflow matrix) and the latest one
+  (2026.11, pinned in the workflow matrix) and the latest one
   (`requirements_test.txt`, bumped by Dependabot). Tests use
-  pytest-homeassistant-custom-component (real `hass` fixture) and never hit
-  the real cloud: use the fakes in `tests/conftest.py`. Actions are pinned to
-  commit SHAs; the workflow token is read-only.
+  pytest-homeassistant (published by home-assistant/core, same version as
+  Home Assistant; real `hass` fixture; `-p no:respx` in `pytest.ini`) and
+  never hit the real cloud: use the fakes in `tests/conftest.py`. Actions
+  are pinned to commit SHAs; the workflow token is read-only.
 - No `country` key in `hacs.json`: the integration must be visible in every
   country.
-- Listed in the HACS default catalog (`hacs/default`, integration list): the
-  README installation leads with searching for BeSMART in HACS; the custom
-  repository route is only a fallback.
+- Listed in the default catalog (`hacs/default`, integration list), read by
+  the Marketplace built into Home Assistant 2026.11+: the README installation
+  leads with searching for BeSMART in the Marketplace; Add from link is only
+  a fallback.

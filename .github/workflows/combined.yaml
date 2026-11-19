@@ -46,8 +46,8 @@ jobs:
         include:
           # Minimum supported version (hacs.json "homeassistant"). Pinned here,
           # not in requirements_test.txt, so Dependabot does not bump it.
-          - ha: "2026.7 (minimum)"
-            deps: "pytest-homeassistant-custom-component==0.13.348"
+          - ha: "2026.11 (minimum)"
+            deps: "pytest-homeassistant==2026.11.0"
           # Latest release, kept up to date by Dependabot.
           - ha: "latest"
             deps: "-r requirements_test.txt"

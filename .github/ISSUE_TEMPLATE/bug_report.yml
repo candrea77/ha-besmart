@@ -29,7 +29,7 @@ body:
     id: integration_version
     attributes:
       label: BeSMART integration version
-      description: Visible in HACS or in Settings → Devices & services → BeSMART.
+      description: Visible in the Marketplace or in Settings → Devices & services → BeSMART.
       placeholder: "e.g. 0.7.0"
     validations:
       required: true

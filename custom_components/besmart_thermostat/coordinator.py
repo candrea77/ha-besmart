@@ -224,6 +224,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
 
         previous: BesmartData = self.data or {}
         result: BesmartData = {}
+        # PATCH 0.10.1: did any core read (boiler, thermostat) succeed?
+        core_ok = False
 
         for device in self.interface_devices:
             wifi_box = device.wifi_box
@@ -250,6 +252,8 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
                     raise resp
 
             boiler = responses[0]
+            if isinstance(boiler, dict):
+                core_ok = True
             if isinstance(boiler, Exception) or boiler is None:
                 # Transient error: keep the previous snapshot (no flapping).
                 boiler = prev_box.get("boiler")
@@ -267,6 +271,7 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
             # PATCH 0.10: only fresh reads count (a failed read reuses the
             # previous data: it neither confirms nor clears offline).
             if fresh:
+                core_ok = True
                 self._update_boiler_link(wifi_box, _box_link(fresh))
 
             # PATCH 0.7: optional; failure -> None (unknown), no stale value.
@@ -282,6 +287,13 @@ class BesmartDataUpdateCoordinator(DataUpdateCoordinator[BesmartData]):
                 "modulation": modulation,
                 "thermostats": thermostats,
             }
+
+        # PATCH 0.10.1: a transient error no longer resets the login (see
+        # BesmartClient._read). Safety net: if no core read succeeded in this
+        # cycle, log in again at the next one, whatever the error was.
+        if not core_ok:
+            _LOGGER.debug("no core read succeeded: logging in again next cycle")
+            self.client.reset_login()
 
         # If nothing at all came back (and we have no previous data to fall back
         # on), mark the update as failed so entities go unavailable.
