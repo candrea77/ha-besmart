@@ -384,7 +384,7 @@ Home Assistant in English).
 ## Tested devices
 
 - **Beretta Mynute X 30 C** with 2 BeSMART WiFi thermostats
-  (Home Assistant 2026.10.1).
+  (Home Assistant 2026.11.2).
 
 Other BeSMART-compatible boilers should work; please report your model in an
 issue (with a diagnostics file) so it can be added here.
