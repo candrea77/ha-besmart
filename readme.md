@@ -35,7 +35,7 @@ through the BeSMART cloud — the same service used by the official app.
 
 Tested on:
 
-- **Real installation:** Home Assistant **2026.10.1** with a Beretta Mynute
+- **Real installation:** Home Assistant **2026.11.2** with a Beretta Mynute
   X 30 C and 2 BeSMART thermostats.
 - **CI (automated tests):** Home Assistant **2026.11** and the **latest stable
   release**.
