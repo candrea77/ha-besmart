@@ -1,7 +1,7 @@
 """Setup, migration, config/reauth/reconfigure flows, Repairs and diagnostics.
 
-Runs against a real Home Assistant instance (pytest-homeassistant-custom-
-component); the BeSMART cloud is replaced by FakeSession.
+Runs against a real Home Assistant instance (pytest-homeassistant); the
+BeSMART cloud is replaced by FakeSession.
 """
 
 import json
@@ -23,7 +23,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.besmart_thermostat import api
 from custom_components.besmart_thermostat.api import BesmartClient

@@ -12,7 +12,7 @@ import pytest
 from homeassistant.components.climate import ATTR_PRESET_MODE, ATTR_PRESET_MODES
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.besmart_thermostat.const import DOMAIN
 

@@ -276,8 +276,10 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         self._current_unit = thermostat.get("unit", "0")
         self._season = thermostat.get("season", "1")
 
+    # PATCH 0.10.1: native_* temperature API (Home Assistant 2026.11; the old
+    # names stop working in 2027.11). Values and unit are unchanged.
     @property
-    def current_temperature(self):
+    def native_current_temperature(self):
         """Return the current temperature."""
         return self._current_temp
 
@@ -345,7 +347,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         return self.PRESET_MODE_LIST
 
     @property
-    def target_temperature(self):
+    def native_target_temperature(self):
         """Return the temperature we try to reach."""
         if self._tempSetMark == "2":
             return self._comfT
@@ -361,7 +363,7 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
         return self.CLIMATE_TEMP_STEP
 
     @property
-    def temperature_unit(self):
+    def native_temperature_unit(self):
         """Return the unit of measurement."""
         if self._current_unit == "0":
             return UnitOfTemperature.CELSIUS
@@ -391,7 +393,8 @@ class Thermostat(CoordinatorEntity[BesmartDataUpdateCoordinator], ClimateEntity)
             ATTR_MODE: self._current_state,
             # PATCH 0.10: was "setpoint_OT" (translation keys are lowercase).
             "ot_set_point": self._setpoint_OT,
-            "updating_temp": self._tempSet != self.target_temperature,
+            # PATCH 0.10.1: native value (target_temperature is deprecated).
+            "updating_temp": self._tempSet != self.native_target_temperature,
             "battery_low": self._battery_low,
             "frost_temp": self._frostT,
             # PATCH 0.10: was "confort_temp" (typo).

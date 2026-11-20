@@ -494,6 +494,12 @@ class BesmartClient:
 
         On error logs a redacted warning and (for core reads) resets the login
         so that the next cycle logs in again.
+
+        PATCH 0.10.1: transient errors (HTTP 5xx, timeout, connection error)
+        keep the login: the cloud answers a sporadic 500 now and then, and the
+        login returns no session token to renew (reads use user id, wifi box
+        id and the fixed app token). HTTP 4xx and invalid responses still
+        reset it; the coordinator also resets it when a whole cycle fails.
         """
         try:
             await self._ensure_login()
@@ -501,6 +507,8 @@ class BesmartClient:
                 user=self._current_user_id(), token=self.TOKEN, **fmt
             )
             status, data = await self._request("get", url)
+            if status >= 500:
+                raise BesmartError(f"HTTP {status}", retryable=True)
             if status >= 400:
                 raise BesmartError(f"HTTP {status}")
             if not isinstance(data, dict):
@@ -510,9 +518,14 @@ class BesmartClient:
             raise
         except Exception as ex:  # pylint: disable=broad-except
             _LOGGER.warning("Error in %s(): %s", name, self._redact(str(ex)))
-            if reset_user:
+            transient = isinstance(ex, BesmartError) and ex.retryable
+            if reset_user and not transient:
                 self._user = None  # force re-login on next cycle
             return None
+
+    def reset_login(self) -> None:
+        """PATCH 0.10.1: log in again before the next read (no request now)."""
+        self._user = None
 
     async def devices(self, wifi_box: str):
         data = await self._read("devices", self.GET_WIFI_BOX_DATA, wifi_box=wifi_box)

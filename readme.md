@@ -1,6 +1,6 @@
 # BeSMART for Home Assistant
 
-[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=candrea77&repository=ha-besmart&category=integration)
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=candrea77&repository=ha-besmart&category=integration)
 [![Validation](https://github.com/candrea77/ha-besmart/actions/workflows/combined.yaml/badge.svg)](https://github.com/candrea77/ha-besmart/actions/workflows/combined.yaml)
 
 Home Assistant integration for **Riello BeSMART** WiFi thermostats and the
@@ -30,30 +30,33 @@ through the BeSMART cloud — the same service used by the official app.
 
 ## Requirements
 
-- **Minimum version:** Home Assistant **2026.7** (also declared in `hacs.json`).
+- **Minimum version:** Home Assistant **2026.11** (also declared in `hacs.json`).
 - A BeSMART account working in the official app (WiFi box online).
 
 Tested on:
 
-- **Real installation:** Home Assistant **2026.10.1** with a Beretta Mynute
+- **Real installation:** Home Assistant **2026.11.2** with a Beretta Mynute
   X 30 C and 2 BeSMART thermostats.
-- **CI (automated tests):** Home Assistant **2026.7** and the **latest stable
+- **CI (automated tests):** Home Assistant **2026.11** and the **latest stable
   release**.
 
 ## Installation
 
-### HACS (recommended)
+### Marketplace (recommended)
 
-1. In HACS, search for **BeSMART** (by candrea77) and download it. The
-   **Open in HACS** badge above is a shortcut to the same page.
+1. Go to **Settings → Marketplace**, search for **BeSMART** (by candrea77)
+   and select **Install**. The **Open Marketplace repository** badge above is
+   a shortcut to the same page.
 2. Restart Home Assistant.
 3. Go to **Settings → Devices & services → Add integration → BeSMART** and
    enter your BeSMART username and password.
 
-If BeSMART does not show up yet (e.g. HACS has not refreshed its list), add
-`https://github.com/candrea77/ha-besmart` as a *custom repository* of type
-**Integration** (HACS → ⋮ → **Custom repositories**), then continue from
-step 1.
+If BeSMART does not show up, select **Add from link** in the Marketplace and
+enter `candrea77/ha-besmart` (this needs a GitHub account connected to the
+Marketplace), then continue from step 1.
+
+Updates appear in **Settings → Updates**; restart Home Assistant after
+updating.
 
 > [!NOTE]
 > This integration uses the domain `besmart_thermostat`, like
@@ -68,8 +71,13 @@ folder of your Home Assistant configuration and restart.
 
 ### Switching from coder89/ha-besmart
 
-Your existing BeSMART entry is migrated automatically: you do **not** need to
-remove it or enter your credentials again.
+Both integrations use the domain `besmart_thermostat`, so only one can be
+installed at a time. How you switch depends on your Home Assistant version.
+
+#### Still on Home Assistant 2026.10 or older (HACS): switch first, then update
+
+This keeps your entry, entity IDs and history. Do it **before** updating
+Home Assistant to 2026.11.
 
 1. **Make a Home Assistant backup** (the migration cannot be undone).
 2. In HACS, open *BeSMART* from coder89 → ⋮ → **Remove** (this removes only
@@ -77,17 +85,21 @@ remove it or enter your credentials again.
    integration from *Settings → Devices & services*. If you had added
    coder89's repository as a custom repository, also remove that entry from
    HACS → ⋮ → **Custom repositories**.
-3. In HACS, search for **BeSMART** (by candrea77), download it and
+3. In HACS, search for **BeSMART** (by candrea77), download version
+   **0.10.0** (the last one for Home Assistant before 2026.11) and
    **restart** Home Assistant.
 4. On start, the entry is upgraded: credentials move to protected storage,
    TLS verification is turned on and the default update interval (300 s) is
    used. Check **Settings → Repairs** for any message.
+5. Update Home Assistant to 2026.11 or newer: HACS is migrated to the
+   built-in Marketplace automatically.
+6. Update BeSMART to the latest version from **Settings → Updates** and
+   restart Home Assistant.
 
 What you keep and what changes:
 
 - Thermostats (climate), water heater and the BeSMART device keep their
-  entity IDs, history, dashboards and automations (the displayed name may now
-  be prefixed with the device name).
+  entity IDs, history, dashboards and automations.
 - coder89's **Thermostat Battery** percentage sensors are replaced by
   **Thermostat Battery Status** (low / good). The old sensors become
   unavailable: update dashboards/automations that use them, then delete them
@@ -98,6 +110,29 @@ What you keep and what changes:
   **Reconfigure** to change them.
 
 To go back to coder89's version, restore the backup made in step 1.
+
+#### Already on Home Assistant 2026.11 or newer (Marketplace): set up again
+
+The Marketplace does not uninstall coder89's version while its entry exists,
+and does not install this one while coder89's is installed. You have to
+remove the entry and set BeSMART up again:
+
+1. **Make a Home Assistant backup.**
+2. Write down the entity IDs used in your automations, scripts and
+   dashboards.
+3. In **Settings → Devices & services**, delete the BeSMART entry (coder89).
+4. In **Settings → Marketplace**, open *BeSMART* from coder89 → ⋮ →
+   **Uninstall**. If you had added it with **Add from link**, also remove it
+   under **Add from link → Added from links**.
+5. In **Settings → Marketplace**, search for **BeSMART** (by candrea77),
+   select **Install** and restart Home Assistant.
+6. Go to **Settings → Devices & services → Add integration → BeSMART** and
+   enter your BeSMART username and password again.
+
+Entity IDs, history, dashboards and automations are **not** guaranteed to
+carry over: compare the new entity IDs with your notes and update what uses
+them. Deleted entities are not restored when you set BeSMART up again,
+because their unique IDs include the ID of the deleted entry.
 
 ## Configuration
 
@@ -349,7 +384,7 @@ Home Assistant in English).
 ## Tested devices
 
 - **Beretta Mynute X 30 C** with 2 BeSMART WiFi thermostats
-  (Home Assistant 2026.10.1).
+  (Home Assistant 2026.11.2).
 
 Other BeSMART-compatible boilers should work; please report your model in an
 issue (with a diagnostics file) so it can be added here.

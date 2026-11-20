@@ -1,5 +1,30 @@
 ## Changes as compared to your installed version:
 
+## 0.10.1
+
+**⚠️ Requires Home Assistant 2026.11 or newer. On older versions, stay on
+0.10.0.**
+
+Install and update BeSMART from the **Marketplace** built into Home
+Assistant (Settings → Marketplace), which replaces HACS.
+
+### Home Assistant 2026.11 deprecation
+- Thermostats and the water heater use the new temperature API of Home
+  Assistant 2026.11. The log no longer shows the warnings "... provides the
+  deprecated temperature_unit / current_temperature / target_temperature,
+  this will stop working in Home Assistant 2027.11".
+- Nothing else changes: entity IDs, names, attributes, temperatures, limits
+  and steps are the same.
+
+### Fewer logins on sporadic cloud errors
+- A sporadic error of a single read (HTTP 500, timeout, connection error) no
+  longer forces a new login at the next update; the previous data is kept as
+  before. A new login still happens when the cloud answers with a 4xx error
+  or an invalid response, and when no read succeeds in a whole update.
+- If you change your BeSMART password, the reauthentication request now
+  appears at the next login (for example after a Home Assistant restart),
+  not at the first sporadic cloud error.
+
 ## 0.10.0
 
 ### ⚠️ Breaking changes: thermostat presets and attributes renamed

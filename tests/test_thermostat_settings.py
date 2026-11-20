@@ -12,7 +12,7 @@ import logging
 import pytest
 from homeassistant.const import CONF_MODE, CONF_PASSWORD, CONF_USERNAME, STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.besmart_thermostat import coordinator as coordinator_module
 from custom_components.besmart_thermostat import number as number_module
